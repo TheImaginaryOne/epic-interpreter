@@ -1,0 +1,57 @@
+use crate::ast::{Spanned, Expr, UnaryOp, BinaryOp, Literal, binary, unary, literal};
+use std::str::FromStr;
+
+grammar;
+
+// @L means left location, @R means right location,
+// the parser will add this information into the AST
+pub Expr: Spanned<Expr> = {
+    Compare => <>,
+    @L Compare Sp<EqOp> Compare @R => binary(<>),
+}
+Compare: Spanned<Expr> = {
+    @L Add Sp<CompareOp> Add @R => binary(<>),
+    Add => <>,
+}
+Add: Spanned<Expr> = {
+    @L Mul Sp<AddOp> Mul @R => binary(<>),
+    Mul => <>,
+}
+Mul: Spanned<Expr> = {
+    @L Unary Sp<MulOp> Unary @R => binary(<>),
+    Unary => <>,
+}
+Unary: Spanned<Expr> = {
+    Primary => <>,
+    @L Sp<UnaryOp> Primary @R => unary(<>),
+}
+Primary: Spanned<Expr> = {
+    "(" <Expr> ")",
+    @L Integer @R => literal(<>),
+}
+
+// utility
+Sp<R>: Spanned<R> = {
+    @L R @R => Spanned::new(<>),
+}
+Integer: Literal = {
+    r"[0-9]+" => Literal::Int(i32::from_str(<>).unwrap())
+}
+UnaryOp: UnaryOp = {
+    "-" => UnaryOp::Neg
+}
+MulOp: BinaryOp = {
+    "*" => BinaryOp::Mul,
+    "/" => BinaryOp::Div,
+}
+AddOp: BinaryOp = {
+    "+" => BinaryOp::Add,
+    "-" => BinaryOp::Sub,
+}
+CompareOp: BinaryOp = {
+    ">" => BinaryOp::Gt,
+    "<" => BinaryOp::Lt,
+}
+EqOp: BinaryOp = {
+    "==" => BinaryOp::Eq
+}
