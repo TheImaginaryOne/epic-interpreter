@@ -25,21 +25,35 @@ mod test {
         }
     }
     #[test]
+    fn left_assoc_1() {
+        assert_eq!(
+            parse_dbg("20 - 33 - 2 + 100"),
+            bin(bin(bin(int(20), "-", int(33)), "-", int(2)), "+", int(100))
+        );
+    }
+    #[test]
+    fn left_assoc_2() {
+        assert_eq!(
+            parse_dbg("1 == 4 == 6"),
+            bin(bin(int(1), "==", int(4)), "==", int(6))
+        );
+    }
+    #[test]
     fn add() {
-        assert_eq!(parse_dbg("1 * -2"), bin(int(1), "*", un("-", int(2)),));
+        assert_eq!(parse_dbg("1 * -2"), bin(int(1), "*", un("-", int(2))));
     }
     #[test]
     fn harder() {
         assert_eq!(
             parse_dbg("5 == 20 - 33 * 2"),
-            bin(int(5), "==", bin(int(20), "-", bin(int(33), "*", int(2))),)
+            bin(int(5), "==", bin(int(20), "-", bin(int(33), "*", int(2))))
         );
     }
     #[test]
     fn bracket() {
         assert_eq!(
             parse_dbg("(10 + 3) / 2"),
-            bin(bin(int(10), "+", int(3)), "/", int(2),)
+            bin(bin(int(10), "+", int(3)), "/", int(2))
         );
     }
     #[test]
@@ -47,7 +61,7 @@ mod test {
         assert_eq!(
             parse_program("let xy = 1 * 2; xy = xy - 11;"),
             vec![
-                Statement::LetDecl(id("xy"), bin(int(1), "*", int(2)),),
+                Statement::LetDecl(id("xy"), bin(int(1), "*", int(2))),
                 Statement::ExprStmt(asgn(id("xy"), bin(expr_id("xy"), "-", int(11))))
             ]
         );

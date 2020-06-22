@@ -23,18 +23,18 @@ Assign: Spanned<Expr> = {
 }
 Equal: Spanned<Expr> = {
     Compare => <>,
-    @L Compare Sp<EqOp> Compare @R => binary(<>),
+    @L Equal Sp<EqOp> Compare @R => binary(<>),
 }
 Compare: Spanned<Expr> = {
-    @L Add Sp<CompareOp> Add @R => binary(<>),
+    @L Compare Sp<CompareOp> Add @R => binary(<>),
     Add => <>,
 }
 Add: Spanned<Expr> = {
-    @L Mul Sp<AddOp> Mul @R => binary(<>),
+    @L Add Sp<AddOp> Mul @R => binary(<>),
     Mul => <>,
 }
 Mul: Spanned<Expr> = {
-    @L Unary Sp<MulOp> Unary @R => binary(<>),
+    @L Mul Sp<MulOp> Unary @R => binary(<>),
     Unary => <>,
 }
 Unary: Spanned<Expr> = {
