@@ -11,7 +11,21 @@ impl<T> Spanned<T> {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct Identifier {
+    pub name: String,
+    // todo
+}
+///
+#[derive(Debug, PartialEq)]
+pub enum Statement {
+    LetDecl(Spanned<Identifier>, Spanned<Expr>),
+    ExprStmt(Spanned<Expr>),
+}
+#[derive(Debug, PartialEq)]
 pub enum Expr {
+    // TODO THIS MIGHT CHANGE LATER
+    Identifier(Identifier),
+    Assign(Spanned<Identifier>, Box<Spanned<Expr>>),
     Binary(Box<Spanned<Expr>>, Spanned<BinaryOp>, Box<Spanned<Expr>>),
     Unary(Spanned<UnaryOp>, Box<Spanned<Expr>>),
     Literal(Literal),
@@ -61,5 +75,17 @@ pub fn literal(left: usize, literal: Literal, right: usize) -> Spanned<Expr> {
         left,
         right,
         inner: Expr::Literal(literal),
+    }
+}
+pub fn assign(
+    left: usize,
+    identifier: Spanned<Identifier>,
+    e2: Spanned<Expr>,
+    right: usize,
+) -> Spanned<Expr> {
+    Spanned {
+        left,
+        right,
+        inner: Expr::Assign(identifier, Box::new(e2)),
     }
 }

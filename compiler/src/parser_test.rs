@@ -11,6 +11,7 @@ mod test {
             Expr::Binary(e1, o, e2) => {
                 clear_span(e1);
                 clear_span(e2);
+                // TODO!
                 o.left = 0;
                 o.right = 0;
             }
@@ -19,8 +20,29 @@ mod test {
                 o.left = 0;
                 o.right = 0;
             }
+            Expr::Assign(i, e) => {
+                i.left = 0;
+                i.right = 0;
+                clear_span(e);
+            }
             _ => (),
         }
+    }
+    fn parse_program(s: &str) -> Vec<Statement> {
+        let mut p = grammar::ProgramParser::new().parse(s).unwrap();
+        for s in &mut p {
+            match s {
+                Statement::ExprStmt(e) => {
+                    clear_span(e);
+                }
+                Statement::LetDecl(i, e) => {
+                    i.left = 0;
+                    i.right = 0;
+                    clear_span(e);
+                }
+            }
+        }
+        p
     }
     fn parse_dbg(s: &str) -> Spanned<Expr> {
         let mut e = grammar::ExprParser::new().parse(s).unwrap();
@@ -44,6 +66,13 @@ mod test {
             inner: Expr::Unary(op, Box::new(e1)),
         }
     }
+    pub fn asgn(e1: Spanned<Identifier>, e2: Spanned<Expr>) -> Spanned<Expr> {
+        Spanned {
+            left: 0,
+            right: 0,
+            inner: Expr::Assign(e1, Box::new(e2)),
+        }
+    }
     pub fn bin(e1: Spanned<Expr>, op: Spanned<BinaryOp>, e2: Spanned<Expr>) -> Spanned<Expr> {
         Spanned {
             left: 0,
@@ -57,6 +86,9 @@ mod test {
             right: 0,
             inner: Expr::Literal(literal),
         }
+    }
+    pub fn id(s: &str) -> Identifier {
+        Identifier { name: s.into() }
     }
     #[test]
     fn unexpected() {
@@ -121,6 +153,26 @@ mod test {
                 s(BinaryOp::Div),
                 lit(Literal::Int(2)),
             )
+        );
+    }
+    #[test]
+    fn prog_simple() {
+        assert_eq!(
+            parse_program("let xy = 1 * 2; xy = xy - 11;"),
+            vec![
+                Statement::LetDecl(
+                    s(id("xy")),
+                    bin(lit(Literal::Int(1)), s(BinaryOp::Mul), lit(Literal::Int(2)),)
+                ),
+                Statement::ExprStmt(asgn(
+                    s(id("xy")),
+                    bin(
+                        s(Expr::Identifier(id("xy"))),
+                        s(BinaryOp::Sub),
+                        lit(Literal::Int(11))
+                    )
+                ))
+            ]
         );
     }
 }

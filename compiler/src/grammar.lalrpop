@@ -1,11 +1,27 @@
-use crate::ast::{Spanned, Expr, UnaryOp, BinaryOp, Literal, binary, unary, literal};
+use crate::ast::{Statement, assign, Identifier, Spanned, Expr, UnaryOp, BinaryOp, Literal, binary, unary, literal};
 use std::str::FromStr;
 
 grammar;
 
+pub Program: Vec<Statement> = {
+    <Stmt*> => <>
+}
+Stmt: Statement = {
+    "let" <i:Sp<Ident>> "=" <e:Expr> ";" => {
+        Statement::LetDecl(i, e)
+    },
+    <Expr> ";" => Statement::ExprStmt(<>)
+}
 // @L means left location, @R means right location,
 // the parser will add this information into the AST
 pub Expr: Spanned<Expr> = {
+    Assign => <>,
+}
+Assign: Spanned<Expr> = {
+    Equal => <>,
+    <@L> <Sp<Ident>> "=" <Equal> <@R> => assign(<>)
+}
+Equal: Spanned<Expr> = {
     Compare => <>,
     @L Compare Sp<EqOp> Compare @R => binary(<>),
 }
@@ -27,6 +43,7 @@ Unary: Spanned<Expr> = {
 }
 Primary: Spanned<Expr> = {
     "(" <Expr> ")",
+    <l:@L> <i:Ident> <r:@R> => Spanned::new(l, Expr::Identifier(i), r),
     @L Integer @R => literal(<>),
 }
 
@@ -54,4 +71,7 @@ CompareOp: BinaryOp = {
 }
 EqOp: BinaryOp = {
     "==" => BinaryOp::Eq
+}
+Ident: Identifier = {
+    <name:r"[a-zA-Z]+"> => Identifier { name: name.to_string() }
 }
