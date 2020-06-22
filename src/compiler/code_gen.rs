@@ -1,5 +1,5 @@
 use super::ast::{BinaryOp, Expr, Identifier, Literal, Spanned, Statement};
-use crate::vm::chunk::{Chunk, Opcode, Value};
+use crate::vm::chunk::{Chunk, Instruction, Value};
 
 #[derive(Debug)]
 struct CodeGenError {
@@ -11,7 +11,7 @@ impl CodeGenError {
         Self { ty }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum CodeGenErrorType {
     UndefinedVariable,
     VariableExists,
@@ -53,7 +53,7 @@ impl CodeGen {
                 Statement::ExprStmt(expr) => self.gen_expr(&mut chunk, expr)?,
             }
         }
-        chunk.write_op(Opcode::Return);
+        chunk.write_instr(Instruction::Return);
         Ok(chunk)
     }
     fn resolve_local(&self, id: &Identifier) -> Option<u8> {
@@ -70,9 +70,7 @@ impl CodeGen {
             Expr::Literal(lit) => match lit {
                 Literal::Int(i) => {
                     let index = chunk.write_constant(Value::Int(*i));
-                    chunk.write_op(Opcode::Constant);
-                    // TODO
-                    chunk.write_byte(index as u8);
+                    chunk.write_instr(Instruction::Constant(index as u8));
                 }
                 _ => (),
             },
@@ -80,9 +78,9 @@ impl CodeGen {
                 self.gen_expr(chunk, e2.as_ref())?;
                 self.gen_expr(chunk, e1.as_ref())?;
                 match op.inner {
-                    BinaryOp::Mul => chunk.write_op(Opcode::Multiply),
-                    BinaryOp::Div => chunk.write_op(Opcode::Divide),
-                    BinaryOp::Add => chunk.write_op(Opcode::Add),
+                    BinaryOp::Mul => chunk.write_instr(Instruction::Multiply),
+                    BinaryOp::Div => chunk.write_instr(Instruction::Divide),
+                    BinaryOp::Add => chunk.write_instr(Instruction::Add),
                     _ => todo!(),
                 }
             }
@@ -91,15 +89,13 @@ impl CodeGen {
                 let index = self
                     .resolve_local(&id.inner)
                     .ok_or_else(|| CodeGenError::new(CodeGenErrorType::UndefinedVariable))?;
-                chunk.write_op(Opcode::WriteLocal);
-                chunk.write_byte(index);
+                chunk.write_instr(Instruction::WriteLocal(index));
             }
             Expr::Identifier(id) => {
                 let index = self
                     .resolve_local(&id)
                     .ok_or_else(|| CodeGenError::new(CodeGenErrorType::UndefinedVariable))?;
-                chunk.write_op(Opcode::ReadLocal);
-                chunk.write_byte(index);
+                chunk.write_instr(Instruction::ReadLocal(index));
             }
             _ => todo!(),
         }
@@ -110,18 +106,41 @@ impl CodeGen {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::vm::Vm;
-    use crate::compiler::grammar::ProgramParser;
+    use crate::vm::chunk::Instruction;
+    use crate::test_utils::*;
+
+    // TODO defunct
     #[test]
-    fn simple() {
-        let code = "let x = 4 * 6; x = x + 3;";
+    fn prog_simple() {
+        let ast = vec![
+            Statement::LetDecl(id("xy"), bin(int(1), "*", int(2))),
+            Statement::ExprStmt(asgn(id("xy"), bin(expr_id("xy"), "+", int(11)))),
+        ];
+
         let mut code_gen = CodeGen::new();
-        let prog = ProgramParser::new().parse(code).unwrap();
+        let bytecode = code_gen.generate(&ast);
+        assert_eq!(bytecode.unwrap(), Chunk::new());
+    }
+    #[test]
+    fn undefined_variable() {
+        let ast = vec![
+            Statement::LetDecl(id("xy"), bin(int(1), "*", int(2))),
+            Statement::ExprStmt(asgn(id("xyz"), bin(int(3), "*", int(6)))),
+        ];
 
-        let bytecode = code_gen.generate(&prog);
-        //assert_eq!(bytecode.unwrap(), Chunk::new());
+        let mut code_gen = CodeGen::new();
+        let err = code_gen.generate(&ast).unwrap_err();
+        assert_eq!(err.ty, CodeGenErrorType::UndefinedVariable);
+    }
+    #[test]
+    fn duplicate_let() {
+        let ast = vec![
+            Statement::LetDecl(id("xy"), bin(int(1), "*", int(2))),
+            Statement::LetDecl(id("xy"), bin(int(3), "*", int(6))),
+        ];
 
-        let mut vm = Vm::new(bytecode.unwrap());
-        vm.interpret().unwrap();
+        let mut code_gen = CodeGen::new();
+        let err = code_gen.generate(&ast).unwrap_err();
+        assert_eq!(err.ty, CodeGenErrorType::VariableExists);
     }
 }
