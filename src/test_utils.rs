@@ -1,8 +1,8 @@
 /// Utility functions for running tests
 use crate::compiler::ast::*;
 use crate::compiler::grammar;
-use lalrpop_util::*;
 use crate::vm::chunk::*;
+use lalrpop_util::*;
 pub fn clear_span(e: &mut Spanned<Expr>) {
     e.left = 0;
     e.right = 0;
@@ -101,3 +101,12 @@ pub fn expr_id(s: &str) -> Spanned<Expr> {
     dummy_span(Expr::Identifier(Identifier { name: s.into() }))
 }
 
+// chunk utility
+pub fn chunk(ints: Vec<i32>, instrs: Vec<Instruction>) -> Chunk {
+    let mut c = Chunk::new();
+    c.values = ints.iter().map(|x| Value::Int(*x)).collect();
+    for i in instrs {
+        c.write_instr(i)
+    }
+    c
+}

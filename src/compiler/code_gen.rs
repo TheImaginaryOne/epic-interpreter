@@ -106,8 +106,8 @@ impl CodeGen {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::vm::chunk::Instruction;
     use crate::test_utils::*;
+    use crate::vm::chunk::Instruction;
 
     // TODO defunct
     #[test]
@@ -119,7 +119,20 @@ mod test {
 
         let mut code_gen = CodeGen::new();
         let bytecode = code_gen.generate(&ast);
-        assert_eq!(bytecode.unwrap(), Chunk::new());
+        let c = chunk(
+            vec![2, 1, 11],
+            vec![
+                Instruction::Constant(0),
+                Instruction::Constant(1),
+                Instruction::Multiply,
+                Instruction::Constant(2),
+                Instruction::ReadLocal(0),
+                Instruction::Add,
+                Instruction::WriteLocal(0),
+                Instruction::Return,
+            ],
+        );
+        assert_eq!(bytecode.unwrap(), c);
     }
     #[test]
     fn undefined_variable() {

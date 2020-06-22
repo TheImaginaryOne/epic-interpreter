@@ -1,6 +1,6 @@
 pub mod chunk;
 
-use chunk::{Chunk, Opcode, Value};
+use chunk::{Chunk, Instruction, Opcode, Value};
 use num_traits::FromPrimitive;
 
 #[derive(Debug, PartialEq)]
@@ -115,67 +115,57 @@ impl Vm {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::test_utils::*;
     #[test]
     fn basic_vm() {
-        let mut chunk = Chunk::new();
-        let a = chunk.write_constant(Value::Int(5));
-        let b = chunk.write_constant(Value::Int(3));
-        let c = chunk.write_constant(Value::Int(7));
+        let c = chunk(
+            vec![5, 3, 7],
+            vec![
+                Instruction::Constant(0),
+                Instruction::Constant(1),
+                Instruction::Constant(2),
+                Instruction::Add,
+                Instruction::Multiply,
+                Instruction::Return,
+            ],
+        );
 
-        chunk.write_op(Opcode::Constant);
-        chunk.write_byte(a as u8);
-        chunk.write_op(Opcode::Constant);
-        chunk.write_byte(b as u8);
-        chunk.write_op(Opcode::Constant);
-        chunk.write_byte(c as u8);
-        chunk.write_op(Opcode::Add);
-        chunk.write_op(Opcode::Multiply);
-        chunk.write_op(Opcode::Return);
-
-        let mut vm = Vm::new(chunk);
+        let mut vm = Vm::new(c);
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(0).unwrap(), &Value::Int(50));
     }
     #[test]
     fn vm_stack_1() {
-        let mut chunk = Chunk::new();
-        let a = chunk.write_constant(Value::Int(5));
-        let b = chunk.write_constant(Value::Int(3));
-
-        chunk.write_op(Opcode::Constant);
-        chunk.write_byte(a as u8);
-        chunk.write_op(Opcode::Constant);
-        chunk.write_byte(b as u8);
-        chunk.write_op(Opcode::Add);
-        chunk.write_op(Opcode::ReadLocal);
-        chunk.write_byte(0);
-        chunk.write_op(Opcode::Add);
-        chunk.write_op(Opcode::Return);
-
-        let mut vm = Vm::new(chunk);
+        let c = chunk(
+            vec![5, 3],
+            vec![
+                Instruction::Constant(0),
+                Instruction::Constant(1),
+                Instruction::Add,
+                Instruction::ReadLocal(0),
+                Instruction::Add,
+                Instruction::Return,
+            ],
+        );
+        let mut vm = Vm::new(c);
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(0).unwrap(), &Value::Int(16));
     }
     #[test]
     fn vm_stack_2() {
-        let mut chunk = Chunk::new();
-        let a = chunk.write_constant(Value::Int(5));
-        let b = chunk.write_constant(Value::Int(3));
-        let c = chunk.write_constant(Value::Int(7));
+        let c = chunk(
+            vec![5, 3, 7],
+            vec![
+                Instruction::Constant(0),
+                Instruction::Constant(1),
+                Instruction::Constant(2),
+                Instruction::ReadLocal(0),
+                Instruction::WriteLocal(2),
+                Instruction::Return,
+            ],
+        );
 
-        chunk.write_op(Opcode::Constant);
-        chunk.write_byte(a as u8);
-        chunk.write_op(Opcode::Constant);
-        chunk.write_byte(b as u8);
-        chunk.write_op(Opcode::Constant);
-        chunk.write_byte(c as u8);
-        chunk.write_op(Opcode::ReadLocal);
-        chunk.write_byte(0);
-        chunk.write_op(Opcode::WriteLocal);
-        chunk.write_byte(2);
-        chunk.write_op(Opcode::Return);
-
-        let mut vm = Vm::new(chunk);
+        let mut vm = Vm::new(c);
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(2).unwrap(), &Value::Int(5));
     }

@@ -4,6 +4,15 @@ pub enum Value {
     Float(f32),
 }
 
+pub enum Instruction {
+    Return,
+    Constant(u8),
+    Add,
+    Multiply,
+    Divide,
+    ReadLocal(u8),
+    WriteLocal(u8),
+}
 #[derive(Primitive)]
 pub enum Opcode {
     Return = 0x00,
@@ -35,5 +44,25 @@ impl Chunk {
     pub fn write_constant(&mut self, value: Value) -> usize {
         self.values.push(value);
         self.values.len() - 1
+    }
+    pub fn write_instr(&mut self, i: Instruction) {
+        match i {
+            Instruction::Return => self.write_op(Opcode::Return),
+            Instruction::Constant(b) => {
+                self.write_op(Opcode::Constant);
+                self.write_byte(b);
+            }
+            Instruction::Add => self.write_op(Opcode::Add), // subtract is a special case!
+            Instruction::Multiply => self.write_op(Opcode::Multiply),
+            Instruction::Divide => self.write_op(Opcode::Multiply),
+            Instruction::ReadLocal(b) => {
+                self.write_op(Opcode::ReadLocal);
+                self.write_byte(b);
+            }
+            Instruction::WriteLocal(b) => {
+                self.write_op(Opcode::WriteLocal);
+                self.write_byte(b);
+            }
+        }
     }
 }
