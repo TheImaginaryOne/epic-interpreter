@@ -9,6 +9,7 @@ pub enum RuntimeError {
     UnexpectedEof,
     InvalidType, // TODO
     StackUnderflow,
+    StackOutOfRange,
     CannotFindConstant,
 }
 pub struct Vm {
@@ -80,6 +81,28 @@ impl Vm {
                     };
                     self.stack.push(result);
                 }
+                Opcode::ReadLocal => {
+                    // Copies a local at a position in the index
+                    // and copies to the stack top.
+                    let index = self.next_byte()?;
+                    let val = self
+                        .stack
+                        .get(index as usize)
+                        .ok_or_else(|| RuntimeError::StackOutOfRange)?
+                        .clone();
+                    self.stack.push(val);
+                }
+                Opcode::WriteLocal => {
+                    // Writes the stack top to a
+                    // local somewhere down the stack
+                    let index = self.next_byte()?;
+                    let new_val = self.pop_stack()?;
+                    let val = self
+                        .stack
+                        .get_mut(index as usize)
+                        .ok_or_else(|| RuntimeError::StackOutOfRange)?;
+                    std::mem::replace(val, new_val);
+                }
                 Opcode::Return => {
                     break;
                 }
@@ -112,5 +135,48 @@ mod test {
         let mut vm = Vm::new(chunk);
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(0).unwrap(), &Value::Int(50));
+    }
+    #[test]
+    fn vm_stack_1() {
+        let mut chunk = Chunk::new();
+        let a = chunk.write_constant(Value::Int(5));
+        let b = chunk.write_constant(Value::Int(3));
+
+        chunk.write_op(Opcode::Constant);
+        chunk.write_byte(a as u8);
+        chunk.write_op(Opcode::Constant);
+        chunk.write_byte(b as u8);
+        chunk.write_op(Opcode::Add);
+        chunk.write_op(Opcode::ReadLocal);
+        chunk.write_byte(0);
+        chunk.write_op(Opcode::Add);
+        chunk.write_op(Opcode::Return);
+
+        let mut vm = Vm::new(chunk);
+        assert_eq!(vm.interpret(), Ok(()));
+        assert_eq!(vm.stack.get(0).unwrap(), &Value::Int(16));
+    }
+    #[test]
+    fn vm_stack_2() {
+        let mut chunk = Chunk::new();
+        let a = chunk.write_constant(Value::Int(5));
+        let b = chunk.write_constant(Value::Int(3));
+        let c = chunk.write_constant(Value::Int(7));
+
+        chunk.write_op(Opcode::Constant);
+        chunk.write_byte(a as u8);
+        chunk.write_op(Opcode::Constant);
+        chunk.write_byte(b as u8);
+        chunk.write_op(Opcode::Constant);
+        chunk.write_byte(c as u8);
+        chunk.write_op(Opcode::ReadLocal);
+        chunk.write_byte(0);
+        chunk.write_op(Opcode::WriteLocal);
+        chunk.write_byte(2);
+        chunk.write_op(Opcode::Return);
+
+        let mut vm = Vm::new(chunk);
+        assert_eq!(vm.interpret(), Ok(()));
+        assert_eq!(vm.stack.get(2).unwrap(), &Value::Int(5));
     }
 }

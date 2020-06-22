@@ -11,7 +11,10 @@ pub enum Opcode {
     Add = 0x02, // subtract is a special case!
     Multiply = 0x03,
     Divide = 0x04,
+    ReadLocal = 0x05,
+    WriteLocal = 0x06,
 }
+#[derive(Debug, PartialEq)]
 pub struct Chunk {
     pub bytes: Vec<u8>,
     pub values: Vec<Value>,
