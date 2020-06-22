@@ -1,4 +1,4 @@
-use crate::ast::{Statement, assign, Identifier, Spanned, Expr, UnaryOp, BinaryOp, Literal, binary, unary, literal};
+use crate::compiler::ast::{Statement, assign, Identifier, Spanned, Expr, UnaryOp, BinaryOp, Literal, binary, unary, literal};
 use std::str::FromStr;
 
 grammar;

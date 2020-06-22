@@ -1,6 +1,19 @@
-[workspace]
+[package]
+name = "language"
+version = "0.1.0"
+authors = ["TheImaginaryOne <johnathanleung@hotmail.co.nz>"]
+edition = "2018"
 
-members = [
-    "vm",
-    "compiler",
-]
+build = "build.rs" # LALRPOP preprocessing
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+lalrpop-util = "0.19"
+regex = "1"
+thiserror = "1.0"
+num-traits = "0.2"
+enum-primitive-derive = "0.2"
+
+# Add a build-time dependency on the lalrpop library:
+[build-dependencies]
+lalrpop = { version = "0.19", features = ["lexer"] }

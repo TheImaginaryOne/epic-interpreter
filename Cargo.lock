@@ -119,15 +119,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
-name = "compiler"
-version = "0.1.0"
-dependencies = [
- "lalrpop",
- "lalrpop-util",
- "regex",
-]
-
-[[package]]
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -299,6 +290,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7e88f15a7d31dfa8fb607986819039127f0161058a3b248a146142d276cbd28"
 dependencies = [
  "regex",
+]
+
+[[package]]
+name = "language"
+version = "0.1.0"
+dependencies = [
+ "enum-primitive-derive",
+ "lalrpop",
+ "lalrpop-util",
+ "num-traits",
+ "regex",
+ "thiserror",
 ]
 
 [[package]]
@@ -558,15 +561,6 @@ name = "unicode-xid"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "826e7639553986605ec5979c7dd957c7895e93eabed50ab2ffa7f6128a75097c"
-
-[[package]]
-name = "vm"
-version = "0.1.0"
-dependencies = [
- "enum-primitive-derive",
- "num-traits",
- "thiserror",
-]
 
 [[package]]
 name = "wasi"

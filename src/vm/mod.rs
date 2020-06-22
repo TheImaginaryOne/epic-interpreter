@@ -1,4 +1,6 @@
-use crate::chunk::{Chunk, Opcode, Value};
+pub mod chunk;
+
+use chunk::{Chunk, Opcode, Value};
 use num_traits::FromPrimitive;
 
 #[derive(Debug, PartialEq)]

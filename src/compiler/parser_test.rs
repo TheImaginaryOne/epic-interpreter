@@ -1,8 +1,8 @@
 /// Tests grammar, including the LALRPOP parser
 #[cfg(test)]
 mod test {
-    use crate::ast::*;
-    use crate::grammar;
+    use crate::compiler::ast::*;
+    use crate::compiler::grammar;
     use lalrpop_util::*;
     fn clear_span(e: &mut Spanned<Expr>) {
         e.left = 0;
