@@ -45,7 +45,7 @@ impl Vm {
             let op = Opcode::from_u8(next_byte).ok_or_else(|| RuntimeError::InvalidOpcode)?;
 
             match op {
-                Opcode::Constant => {
+                Opcode::LoadConstant => {
                     let i = self.next_byte()?;
                     let value = self
                         .chunk
@@ -58,7 +58,7 @@ impl Vm {
                     let a = self.pop_stack()?;
                     let b = self.pop_stack()?;
                     let result = match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => Value::Int(x + y),
+                        (Value::Integer(x), Value::Integer(y)) => Value::Integer(x + y),
                         _ => return Err(RuntimeError::InvalidType),
                     };
                     self.stack.push(result);
@@ -67,7 +67,7 @@ impl Vm {
                     let a = self.pop_stack()?;
                     let b = self.pop_stack()?;
                     let result = match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => Value::Int(x * y),
+                        (Value::Integer(x), Value::Integer(y)) => Value::Integer(x * y),
                         _ => return Err(RuntimeError::InvalidType),
                     };
                     self.stack.push(result);
@@ -76,7 +76,7 @@ impl Vm {
                     let a = self.pop_stack()?;
                     let b = self.pop_stack()?;
                     let result = match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => Value::Int(x / y),
+                        (Value::Integer(x), Value::Integer(y)) => Value::Integer(x / y),
                         _ => return Err(RuntimeError::InvalidType),
                     };
                     self.stack.push(result);
@@ -121,9 +121,9 @@ mod test {
         let c = chunk(
             vec![5, 3, 7],
             vec![
-                Instruction::Constant(0),
-                Instruction::Constant(1),
-                Instruction::Constant(2),
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
+                Instruction::LoadConstant(2),
                 Instruction::Add,
                 Instruction::Multiply,
                 Instruction::Return,
@@ -132,15 +132,15 @@ mod test {
 
         let mut vm = Vm::new(c);
         assert_eq!(vm.interpret(), Ok(()));
-        assert_eq!(vm.stack.get(0).unwrap(), &Value::Int(50));
+        assert_eq!(vm.stack.get(0).unwrap(), &Value::Integer(50));
     }
     #[test]
     fn vm_stack_1() {
         let c = chunk(
             vec![5, 3],
             vec![
-                Instruction::Constant(0),
-                Instruction::Constant(1),
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
                 Instruction::Add,
                 Instruction::ReadLocal(0),
                 Instruction::Add,
@@ -149,16 +149,16 @@ mod test {
         );
         let mut vm = Vm::new(c);
         assert_eq!(vm.interpret(), Ok(()));
-        assert_eq!(vm.stack.get(0).unwrap(), &Value::Int(16));
+        assert_eq!(vm.stack.get(0).unwrap(), &Value::Integer(16));
     }
     #[test]
     fn vm_stack_2() {
         let c = chunk(
             vec![5, 3, 7],
             vec![
-                Instruction::Constant(0),
-                Instruction::Constant(1),
-                Instruction::Constant(2),
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
+                Instruction::LoadConstant(2),
                 Instruction::ReadLocal(0),
                 Instruction::WriteLocal(2),
                 Instruction::Return,
@@ -167,6 +167,6 @@ mod test {
 
         let mut vm = Vm::new(c);
         assert_eq!(vm.interpret(), Ok(()));
-        assert_eq!(vm.stack.get(2).unwrap(), &Value::Int(5));
+        assert_eq!(vm.stack.get(2).unwrap(), &Value::Integer(5));
     }
 }

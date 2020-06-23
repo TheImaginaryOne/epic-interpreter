@@ -1,12 +1,12 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    Int(i32),
+    Integer(i32),
     Float(f32),
 }
 
 pub enum Instruction {
     Return,
-    Constant(u8),
+    LoadConstant(u8),
     Add,
     Multiply,
     Divide,
@@ -16,7 +16,7 @@ pub enum Instruction {
 #[derive(Primitive)]
 pub enum Opcode {
     Return = 0x00,
-    Constant = 0x01,
+    LoadConstant = 0x01,
     Add = 0x02, // subtract is a special case!
     Multiply = 0x03,
     Divide = 0x04,
@@ -48,8 +48,8 @@ impl Chunk {
     pub fn write_instr(&mut self, i: Instruction) {
         match i {
             Instruction::Return => self.write_op(Opcode::Return),
-            Instruction::Constant(b) => {
-                self.write_op(Opcode::Constant);
+            Instruction::LoadConstant(b) => {
+                self.write_op(Opcode::LoadConstant);
                 self.write_byte(b);
             }
             Instruction::Add => self.write_op(Opcode::Add), // subtract is a special case!

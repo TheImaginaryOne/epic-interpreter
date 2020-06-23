@@ -18,74 +18,84 @@ pub struct Identifier {
 ///
 #[derive(Debug, PartialEq)]
 pub enum Statement {
-    LetDecl(Spanned<Identifier>, Spanned<Expr>),
-    ExprStmt(Spanned<Expr>),
+    // let declaration
+    LetBinding(Spanned<Identifier>, Spanned<Expression>),
+    Expression(Spanned<Expression>),
 }
 #[derive(Debug, PartialEq)]
-pub enum Expr {
+pub enum Expression {
     // TODO THIS MIGHT CHANGE LATER
     Identifier(Identifier),
-    Assign(Spanned<Identifier>, Box<Spanned<Expr>>),
-    Binary(Box<Spanned<Expr>>, Spanned<BinaryOp>, Box<Spanned<Expr>>),
-    Unary(Spanned<UnaryOp>, Box<Spanned<Expr>>),
+    Assign(Spanned<Identifier>, Box<Spanned<Expression>>),
+    Binary(
+        Box<Spanned<Expression>>,
+        Spanned<BinaryOp>,
+        Box<Spanned<Expression>>,
+    ),
+    Unary(Spanned<UnaryOp>, Box<Spanned<Expression>>),
     Literal(Literal),
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Literal {
-    Int(i32),
+    Integer(i32),
 }
 #[derive(Debug, PartialEq)]
 pub enum UnaryOp {
-    Neg,
+    Negate,
 }
 #[derive(Debug, PartialEq)]
 pub enum BinaryOp {
-    Mul,
-    Div,
+    Multiply,
+    Divide,
     Add,
-    Sub,
-    Eq,
-    Gt,
-    Lt,
+    Subtract,
+    Equal,
+    Greater,
+    Less,
 }
 
-pub fn unary(left: usize, op: Spanned<UnaryOp>, e1: Spanned<Expr>, right: usize) -> Spanned<Expr> {
+pub fn unary(
+    left: usize,
+    op: Spanned<UnaryOp>,
+    e1: Spanned<Expression>,
+    right: usize,
+) -> Spanned<Expression> {
     Spanned {
         left,
         right,
-        inner: Expr::Unary(op, Box::new(e1)),
+        inner: Expression::Unary(op, Box::new(e1)),
     }
 }
 pub fn binary(
     left: usize,
-    e1: Spanned<Expr>,
+    e1: Spanned<Expression>,
     op: Spanned<BinaryOp>,
-    e2: Spanned<Expr>,
+    e2: Spanned<Expression>,
     right: usize,
-) -> Spanned<Expr> {
+) -> Spanned<Expression> {
     Spanned {
         left,
         right,
-        inner: Expr::Binary(Box::new(e1), op, Box::new(e2)),
+        inner: Expression::Binary(Box::new(e1), op, Box::new(e2)),
     }
 }
-pub fn literal(left: usize, literal: Literal, right: usize) -> Spanned<Expr> {
+pub fn literal(left: usize, literal: Literal, right: usize) -> Spanned<Expression> {
     Spanned {
         left,
         right,
-        inner: Expr::Literal(literal),
+        inner: Expression::Literal(literal),
     }
 }
 pub fn assign(
     left: usize,
     identifier: Spanned<Identifier>,
-    e2: Spanned<Expr>,
+    e2: Spanned<Expression>,
     right: usize,
-) -> Spanned<Expr> {
+) -> Spanned<Expression> {
     Spanned {
         left,
         right,
-        inner: Expr::Assign(identifier, Box::new(e2)),
+        inner: Expression::Assign(identifier, Box::new(e2)),
     }
 }

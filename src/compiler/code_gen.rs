@@ -1,4 +1,4 @@
-use super::ast::{BinaryOp, Expr, Identifier, Literal, Spanned, Statement};
+use super::ast::{BinaryOp, Expression, Identifier, Literal, Spanned, Statement};
 use crate::vm::chunk::{Chunk, Instruction, Value};
 
 #[derive(Debug)]
@@ -36,7 +36,7 @@ impl CodeGen {
         let mut chunk = Chunk::new();
         for stmt in program {
             match stmt {
-                Statement::LetDecl(ident, expr) => {
+                Statement::LetBinding(ident, expr) => {
                     self.gen_expr(&mut chunk, expr)?;
 
                     let name = &ident.inner.name;
@@ -50,7 +50,7 @@ impl CodeGen {
 
                     self.locals.push(new_local);
                 }
-                Statement::ExprStmt(expr) => self.gen_expr(&mut chunk, expr)?,
+                Statement::Expression(expr) => self.gen_expr(&mut chunk, expr)?,
             }
         }
         chunk.write_instr(Instruction::Return);
@@ -64,34 +64,38 @@ impl CodeGen {
         }
         None
     }
-    fn gen_expr(&mut self, chunk: &mut Chunk, expr: &Spanned<Expr>) -> Result<(), CodeGenError> {
+    fn gen_expr(
+        &mut self,
+        chunk: &mut Chunk,
+        expr: &Spanned<Expression>,
+    ) -> Result<(), CodeGenError> {
         let expr_inner = &expr.inner;
         match expr_inner {
-            Expr::Literal(lit) => match lit {
-                Literal::Int(i) => {
-                    let index = chunk.write_constant(Value::Int(*i));
-                    chunk.write_instr(Instruction::Constant(index as u8));
+            Expression::Literal(lit) => match lit {
+                Literal::Integer(i) => {
+                    let index = chunk.write_constant(Value::Integer(*i));
+                    chunk.write_instr(Instruction::LoadConstant(index as u8));
                 }
                 _ => (),
             },
-            Expr::Binary(e1, op, e2) => {
+            Expression::Binary(e1, op, e2) => {
                 self.gen_expr(chunk, e2.as_ref())?;
                 self.gen_expr(chunk, e1.as_ref())?;
                 match op.inner {
-                    BinaryOp::Mul => chunk.write_instr(Instruction::Multiply),
-                    BinaryOp::Div => chunk.write_instr(Instruction::Divide),
+                    BinaryOp::Multiply => chunk.write_instr(Instruction::Multiply),
+                    BinaryOp::Divide => chunk.write_instr(Instruction::Divide),
                     BinaryOp::Add => chunk.write_instr(Instruction::Add),
                     _ => todo!(),
                 }
             }
-            Expr::Assign(id, e1) => {
+            Expression::Assign(id, e1) => {
                 self.gen_expr(chunk, e1)?;
                 let index = self
                     .resolve_local(&id.inner)
                     .ok_or_else(|| CodeGenError::new(CodeGenErrorType::UndefinedVariable))?;
                 chunk.write_instr(Instruction::WriteLocal(index));
             }
-            Expr::Identifier(id) => {
+            Expression::Identifier(id) => {
                 let index = self
                     .resolve_local(&id)
                     .ok_or_else(|| CodeGenError::new(CodeGenErrorType::UndefinedVariable))?;
@@ -113,8 +117,8 @@ mod test {
     #[test]
     fn prog_simple() {
         let ast = vec![
-            Statement::LetDecl(id("xy"), bin(int(1), "*", int(2))),
-            Statement::ExprStmt(asgn(id("xy"), bin(expr_id("xy"), "+", int(11)))),
+            Statement::LetBinding(id("xy"), bin(int(1), "*", int(2))),
+            Statement::Expression(asgn(id("xy"), bin(expr_id("xy"), "+", int(11)))),
         ];
 
         let mut code_gen = CodeGen::new();
@@ -122,10 +126,10 @@ mod test {
         let c = chunk(
             vec![2, 1, 11],
             vec![
-                Instruction::Constant(0),
-                Instruction::Constant(1),
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
                 Instruction::Multiply,
-                Instruction::Constant(2),
+                Instruction::LoadConstant(2),
                 Instruction::ReadLocal(0),
                 Instruction::Add,
                 Instruction::WriteLocal(0),
@@ -137,8 +141,8 @@ mod test {
     #[test]
     fn undefined_variable() {
         let ast = vec![
-            Statement::LetDecl(id("xy"), bin(int(1), "*", int(2))),
-            Statement::ExprStmt(asgn(id("xyz"), bin(int(3), "*", int(6)))),
+            Statement::LetBinding(id("xy"), bin(int(1), "*", int(2))),
+            Statement::Expression(asgn(id("xyz"), bin(int(3), "*", int(6)))),
         ];
 
         let mut code_gen = CodeGen::new();
@@ -148,8 +152,8 @@ mod test {
     #[test]
     fn duplicate_let() {
         let ast = vec![
-            Statement::LetDecl(id("xy"), bin(int(1), "*", int(2))),
-            Statement::LetDecl(id("xy"), bin(int(3), "*", int(6))),
+            Statement::LetBinding(id("xy"), bin(int(1), "*", int(2))),
+            Statement::LetBinding(id("xy"), bin(int(3), "*", int(6))),
         ];
 
         let mut code_gen = CodeGen::new();

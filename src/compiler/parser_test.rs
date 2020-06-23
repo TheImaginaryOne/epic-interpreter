@@ -61,8 +61,8 @@ mod test {
         assert_eq!(
             parse_program("let xy = 1 * 2; xy = xy - 11;"),
             vec![
-                Statement::LetDecl(id("xy"), bin(int(1), "*", int(2))),
-                Statement::ExprStmt(asgn(id("xy"), bin(expr_id("xy"), "-", int(11))))
+                Statement::LetBinding(id("xy"), bin(int(1), "*", int(2))),
+                Statement::Expression(asgn(id("xy"), bin(expr_id("xy"), "-", int(11))))
             ]
         );
     }

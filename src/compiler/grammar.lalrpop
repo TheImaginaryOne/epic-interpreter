@@ -1,49 +1,49 @@
-use crate::compiler::ast::{Statement, assign, Identifier, Spanned, Expr, UnaryOp, BinaryOp, Literal, binary, unary, literal};
+use crate::compiler::ast::{Statement, assign, Identifier, Spanned, Expression, UnaryOp, BinaryOp, Literal, binary, unary, literal};
 use std::str::FromStr;
 
 grammar;
 
 pub Program: Vec<Statement> = {
-    <Stmt*> => <>
+    <Statement*> => <>
 }
-Stmt: Statement = {
-    "let" <i:Sp<Ident>> "=" <e:Expr> ";" => {
-        Statement::LetDecl(i, e)
+Statement: Statement = {
+    "let" <i:Sp<Ident>> "=" <e:Expression> ";" => {
+        Statement::LetBinding(i, e)
     },
-    <Expr> ";" => Statement::ExprStmt(<>)
+    <Expression> ";" => Statement::Expression(<>)
 }
 // @L means left location, @R means right location,
 // the parser will add this information into the AST
-pub Expr: Spanned<Expr> = {
+pub Expression: Spanned<Expression> = {
     Assign => <>,
 }
-Assign: Spanned<Expr> = {
+Assign: Spanned<Expression> = {
     Equal => <>,
     <@L> <Sp<Ident>> "=" <Equal> <@R> => assign(<>)
 }
-Equal: Spanned<Expr> = {
+Equal: Spanned<Expression> = {
     Compare => <>,
-    @L Equal Sp<EqOp> Compare @R => binary(<>),
+    @L Equal Sp<EqualOp> Compare @R => binary(<>),
 }
-Compare: Spanned<Expr> = {
+Compare: Spanned<Expression> = {
     @L Compare Sp<CompareOp> Add @R => binary(<>),
     Add => <>,
 }
-Add: Spanned<Expr> = {
-    @L Add Sp<AddOp> Mul @R => binary(<>),
-    Mul => <>,
+Add: Spanned<Expression> = {
+    @L Add Sp<AddOp> Multiply @R => binary(<>),
+    Multiply => <>,
 }
-Mul: Spanned<Expr> = {
-    @L Mul Sp<MulOp> Unary @R => binary(<>),
+Multiply: Spanned<Expression> = {
+    @L Multiply Sp<MultiplyOp> Unary @R => binary(<>),
     Unary => <>,
 }
-Unary: Spanned<Expr> = {
+Unary: Spanned<Expression> = {
     Primary => <>,
     @L Sp<UnaryOp> Primary @R => unary(<>),
 }
-Primary: Spanned<Expr> = {
-    "(" <Expr> ")",
-    <l:@L> <i:Ident> <r:@R> => Spanned::new(l, Expr::Identifier(i), r),
+Primary: Spanned<Expression> = {
+    "(" <Expression> ")",
+    <l:@L> <i:Ident> <r:@R> => Spanned::new(l, Expression::Identifier(i), r),
     @L Integer @R => literal(<>),
 }
 
@@ -52,25 +52,25 @@ Sp<R>: Spanned<R> = {
     @L R @R => Spanned::new(<>),
 }
 Integer: Literal = {
-    r"[0-9]+" => Literal::Int(i32::from_str(<>).unwrap())
+    r"[0-9]+" => Literal::Integer(i32::from_str(<>).unwrap())
 }
 UnaryOp: UnaryOp = {
-    "-" => UnaryOp::Neg
+    "-" => UnaryOp::Negate
 }
-MulOp: BinaryOp = {
-    "*" => BinaryOp::Mul,
-    "/" => BinaryOp::Div,
+MultiplyOp: BinaryOp = {
+    "*" => BinaryOp::Multiply,
+    "/" => BinaryOp::Divide,
 }
 AddOp: BinaryOp = {
     "+" => BinaryOp::Add,
-    "-" => BinaryOp::Sub,
+    "-" => BinaryOp::Subtract,
 }
 CompareOp: BinaryOp = {
-    ">" => BinaryOp::Gt,
-    "<" => BinaryOp::Lt,
+    ">" => BinaryOp::Greater,
+    "<" => BinaryOp::Less,
 }
-EqOp: BinaryOp = {
-    "==" => BinaryOp::Eq
+EqualOp: BinaryOp = {
+    "==" => BinaryOp::Equal
 }
 Ident: Identifier = {
     <name:r"[a-zA-Z]+"> => Identifier { name: name.to_string() }
