@@ -1,7 +1,38 @@
 use crate::compiler::ast::{Statement, assign, Identifier, Spanned, Expression, UnaryOp, BinaryOp, Literal, binary, unary, literal};
 use std::str::FromStr;
+use crate::compiler::error::Error as CompileError;
+use crate::compiler::lexer::{Lexer, Token};
+use lalrpop_util::ParseError;
 
-grammar;
+grammar<'a>(input: &'a str);
+
+extern {
+    type Location = usize;
+    type Error = (usize, CompileError, usize);
+    
+    enum Token<'a> {
+        "string" => Token::String(<&'a str>),
+        "integer" => Token::Integer(<&'a str>),
+        "identifier" => Token::Identifier(<&'a str>),
+
+        "+" => Token::Plus,
+        "-" => Token::Minus,
+        "*" => Token::Star,
+        "/" => Token::Slash,
+        "(" => Token::LParen,
+        ")" => Token::RParen,
+        "{" => Token::LBrace,
+        "}" => Token::RBrace,
+        ";" => Token::Semicolon,
+
+        "=" => Token::Equal,
+        "==" => Token::DoubleEqual, // '=='
+        "<" => Token::Less,
+        ">" => Token::Greater,
+        "let" => Token::Let,
+        "if" => Token::If,
+    }
+}
 
 pub Program: Vec<Statement> = {
     <Statement*> => <>
@@ -45,6 +76,7 @@ Primary: Spanned<Expression> = {
     "(" <Expression> ")",
     <l:@L> <i:Ident> <r:@R> => Spanned::new(l, Expression::Identifier(i), r),
     @L Integer @R => literal(<>),
+    @L String @R => literal(<>),
 }
 
 // utility
@@ -52,7 +84,14 @@ Sp<R>: Spanned<R> = {
     @L R @R => Spanned::new(<>),
 }
 Integer: Literal = {
-    r"[0-9]+" => Literal::Integer(i32::from_str(<>).unwrap())
+    <l:@L> <i:"integer"> <r:@R> =>? i32::from_str(i)
+            .map_err(|_| ParseError::User {
+                error: (l, CompileError::CannotParseInteger, r)
+            })
+            .and_then(|x| Ok(Literal::Integer(x)))
+}
+String: Literal = {
+    "string" => Literal::String(<>.into())
 }
 UnaryOp: UnaryOp = {
     "-" => UnaryOp::Negate
@@ -73,5 +112,5 @@ EqualOp: BinaryOp = {
     "==" => BinaryOp::Equal
 }
 Ident: Identifier = {
-    <name:r"[a-zA-Z]+"> => Identifier { name: name.to_string() }
+    "identifier" => Identifier { name: <>.into() }
 }

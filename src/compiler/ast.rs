@@ -39,6 +39,7 @@ pub enum Expression {
 #[derive(Debug, PartialEq)]
 pub enum Literal {
     Integer(i32),
+    String(String),
 }
 #[derive(Debug, PartialEq)]
 pub enum UnaryOp {

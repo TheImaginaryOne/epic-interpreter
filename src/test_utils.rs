@@ -1,6 +1,8 @@
 /// Utility functions for running tests
 use crate::compiler::ast::*;
+use crate::compiler::error::Error;
 use crate::compiler::grammar;
+use crate::compiler::lexer::{Lexer, Token};
 use crate::vm::chunk::*;
 use lalrpop_util::*;
 pub fn clear_span(e: &mut Spanned<Expression>) {
@@ -28,7 +30,8 @@ pub fn clear_span(e: &mut Spanned<Expression>) {
     }
 }
 pub fn parse_program(s: &str) -> Vec<Statement> {
-    let mut p = grammar::ProgramParser::new().parse(s).unwrap();
+    let tokens = Lexer::new(s);
+    let mut p = grammar::ProgramParser::new().parse(s, tokens).unwrap();
     for s in &mut p {
         match s {
             Statement::Expression(e) => {
@@ -44,12 +47,18 @@ pub fn parse_program(s: &str) -> Vec<Statement> {
     p
 }
 pub fn parse_dbg(s: &str) -> Spanned<Expression> {
-    let mut e = grammar::ExpressionParser::new().parse(s).unwrap();
+    let tokens = Lexer::new(s);
+    let t = Lexer::new(s);
+    println!("{:?}", t.collect::<Vec<_>>());
+    let mut e = grammar::ExpressionParser::new().parse(s, tokens).unwrap();
     clear_span(&mut e);
     e
 }
-pub fn parse_err(s: &str) -> ParseError<usize, lexer::Token<'_>, &str> {
-    grammar::ExpressionParser::new().parse(s).unwrap_err()
+pub fn parse_err(s: &str) -> ParseError<usize, Token<'_>, (usize, Error, usize)> {
+    let tokens = Lexer::new(s);
+    grammar::ExpressionParser::new()
+        .parse(s, tokens)
+        .unwrap_err()
 }
 pub fn dummy_span<T>(e: T) -> Spanned<T> {
     Spanned {

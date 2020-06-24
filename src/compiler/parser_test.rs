@@ -2,6 +2,7 @@
 #[cfg(test)]
 mod test {
     use crate::compiler::ast::*;
+    use crate::compiler::error::Error;
     use crate::test_utils::*;
     use lalrpop_util::*;
     #[test]
@@ -13,6 +14,14 @@ mod test {
                 assert_eq!(token.0, 8);
                 assert_eq!(token.2, 9);
             }
+            _ => panic!(),
+        }
+    }
+    #[test]
+    fn out_of_range() {
+        let l = parse_err("178998662548746775989486268475244265837474723410000118");
+        match l {
+            ParseError::User { error, .. } => assert_eq!(error.1, Error::CannotParseInteger),
             _ => panic!(),
         }
     }

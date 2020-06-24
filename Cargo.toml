@@ -16,4 +16,4 @@ enum-primitive-derive = "0.2"
 
 # Add a build-time dependency on the lalrpop library:
 [build-dependencies]
-lalrpop = { version = "0.19", features = ["lexer"] }
+lalrpop = { version = "0.19" }
