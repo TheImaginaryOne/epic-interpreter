@@ -1,7 +1,10 @@
+use crate::vm::heap::{Handle, Object};
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Integer(i32),
     Float(f32),
+    Object(Handle),
 }
 
 pub enum Instruction {

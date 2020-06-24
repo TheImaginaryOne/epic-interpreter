@@ -103,6 +103,9 @@ pub fn bin(e1: Spanned<Expression>, op_str: &str, e2: Spanned<Expression>) -> Sp
 pub fn int(i: i32) -> Spanned<Expression> {
     dummy_span(Expression::Literal(Literal::Integer(i)))
 }
+pub fn string(s: &str) -> Spanned<Expression> {
+    dummy_span(Expression::Literal(Literal::String(s.into())))
+}
 pub fn id(s: &str) -> Spanned<Identifier> {
     dummy_span(Identifier { name: s.into() })
 }

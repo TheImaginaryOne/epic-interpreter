@@ -1,6 +1,8 @@
 pub mod chunk;
+pub mod heap;
 
 use chunk::{Chunk, Instruction, Opcode, Value};
+use heap::{Heap, Object};
 use num_traits::FromPrimitive;
 
 #[derive(Debug, PartialEq)]
@@ -11,17 +13,20 @@ pub enum RuntimeError {
     StackUnderflow,
     StackOutOfRange,
     CannotFindConstant,
+    CannotFindObject,
 }
 pub struct Vm {
+    heap: Heap,
     chunk: Chunk,
     pc: usize,
     stack: Vec<Value>,
 }
 impl Vm {
-    pub fn new(chunk: Chunk) -> Self {
+    pub fn new(chunk: Chunk, heap: Heap) -> Self {
         Self {
             pc: 0,
             chunk,
+            heap,
             stack: Vec::new(),
         }
     }
@@ -59,6 +64,24 @@ impl Vm {
                     let b = self.pop_stack()?;
                     let result = match (a, b) {
                         (Value::Integer(x), Value::Integer(y)) => Value::Integer(x + y),
+                        (Value::Object(x), Value::Object(y)) => {
+                            let (a, b) = (
+                                self.heap
+                                    .get(x)
+                                    .ok_or_else(|| RuntimeError::CannotFindObject)?,
+                                self.heap
+                                    .get(y)
+                                    .ok_or_else(|| RuntimeError::CannotFindObject)?,
+                            );
+                            let handle = match (a, b) {
+                                (Object::String(sa), Object::String(sb)) => {
+                                    let x = [&sa[..], &sb[..]].concat();
+                                    self.heap.push(Object::String(x))
+                                } //_ => return Err(RuntimeError::InvalidType),
+                            };
+
+                            Value::Object(handle)
+                        }
                         _ => return Err(RuntimeError::InvalidType),
                     };
                     self.stack.push(result);
@@ -130,7 +153,7 @@ mod test {
             ],
         );
 
-        let mut vm = Vm::new(c);
+        let mut vm = Vm::new(c, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(0).unwrap(), &Value::Integer(50));
     }
@@ -147,7 +170,7 @@ mod test {
                 Instruction::Return,
             ],
         );
-        let mut vm = Vm::new(c);
+        let mut vm = Vm::new(c, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(0).unwrap(), &Value::Integer(16));
     }
@@ -165,8 +188,38 @@ mod test {
             ],
         );
 
-        let mut vm = Vm::new(c);
+        let mut vm = Vm::new(c, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(2).unwrap(), &Value::Integer(5));
+    }
+    #[test]
+    fn string_literal() {
+        let mut c = Chunk::new();
+
+        let instrs = vec![
+            Instruction::LoadConstant(0),
+            Instruction::LoadConstant(1),
+            Instruction::Add,
+            Instruction::Return,
+        ];
+        for i in instrs {
+            c.write_instr(i);
+        }
+        c.values = vec![Value::Object(0), Value::Object(1)];
+
+        let mut h = Heap::new();
+        h.push(Object::String("oof".into()));
+        h.push(Object::String("ooo".into()));
+
+        let mut vm = Vm::new(c, h);
+        assert_eq!(vm.interpret(), Ok(()));
+        let stack_top = vm.stack.get(0).unwrap();
+        match stack_top {
+            Value::Object(i) => assert_eq!(
+                vm.heap.get(*i as usize).unwrap(),
+                &Object::String("ooooof".into())
+            ),
+            _ => panic!("Stack has {:?}", stack_top),
+        }
     }
 }
