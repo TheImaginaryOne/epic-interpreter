@@ -34,14 +34,16 @@ extern {
     }
 }
 
-pub Program: Vec<Statement> = {
+pub Program: Vec<Spanned<Statement>> = {
     <Statement*> => <>
 }
-Statement: Statement = {
-    "let" <i:Sp<Ident>> "=" <e:Expression> ";" => {
-        Statement::LetBinding(i, e)
+Statement: Spanned<Statement> = {
+    <l:@L> "let" <i:Sp<Ident>> "=" <e:Expression> ";" <r:@R> => {
+        Spanned::new(l, Statement::LetBinding(i, e), r)
     },
-    <Expression> ";" => Statement::Expression(<>)
+    <l:@L> <e:Expression> ";" <r:@R> => {
+        Spanned::new(l, Statement::Expression(e), r)
+    }
 }
 // @L means left location, @R means right location,
 // the parser will add this information into the AST

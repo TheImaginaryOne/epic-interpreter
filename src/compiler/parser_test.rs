@@ -70,8 +70,11 @@ mod test {
         assert_eq!(
             parse_program("let xy = 1 * 2; xy = xy - 11;"),
             vec![
-                Statement::LetBinding(id("xy"), bin(int(1), "*", int(2))),
-                Statement::Expression(asgn(id("xy"), bin(expr_id("xy"), "-", int(11))))
+                dummy_span(Statement::LetBinding(id("xy"), bin(int(1), "*", int(2)))),
+                dummy_span(Statement::Expression(asgn(
+                    id("xy"),
+                    bin(expr_id("xy"), "-", int(11))
+                )))
             ]
         );
     }

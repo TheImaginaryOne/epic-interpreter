@@ -29,11 +29,13 @@ pub fn clear_span(e: &mut Spanned<Expression>) {
         _ => (),
     }
 }
-pub fn parse_program(s: &str) -> Vec<Statement> {
-    let tokens = Lexer::new(s);
-    let mut p = grammar::ProgramParser::new().parse(s, tokens).unwrap();
+pub fn parse_program(source: &str) -> Vec<Spanned<Statement>> {
+    let tokens = Lexer::new(source);
+    let mut p = grammar::ProgramParser::new().parse(source, tokens).unwrap();
     for s in &mut p {
-        match s {
+        s.left = 0;
+        s.right = 0;
+        match &mut s.inner {
             Statement::Expression(e) => {
                 clear_span(e);
             }
