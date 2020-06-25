@@ -5,46 +5,54 @@ use crate::compiler::grammar;
 use crate::compiler::lexer::{Lexer, Token};
 use crate::vm::chunk::*;
 use lalrpop_util::*;
-pub fn clear_span(e: &mut Spanned<Expression>) {
+pub fn clear_expr_span(e: &mut Spanned<Expression>) {
     e.left = 0;
     e.right = 0;
     match &mut e.inner {
         Expression::Binary(e1, o, e2) => {
-            clear_span(e1);
-            clear_span(e2);
+            clear_expr_span(e1);
+            clear_expr_span(e2);
             // TODO!
             o.left = 0;
             o.right = 0;
         }
         Expression::Unary(o, e) => {
-            clear_span(e);
+            clear_expr_span(e);
             o.left = 0;
             o.right = 0;
         }
         Expression::Assign(i, e) => {
             i.left = 0;
             i.right = 0;
-            clear_span(e);
+            clear_expr_span(e);
         }
         _ => (),
+    }
+}
+pub fn clear_stmt_span(stmt: &mut Spanned<Statement>) {
+    stmt.left = 0;
+    stmt.right = 0;
+    match &mut stmt.inner {
+        Statement::Expression(e) => {
+            clear_expr_span(e);
+        }
+        Statement::LetBinding(i, e) => {
+            i.left = 0;
+            i.right = 0;
+            clear_expr_span(e);
+        }
+        Statement::Block(block) => {
+            for stmt in &mut block.statements {
+                clear_stmt_span(stmt);
+            }
+        }
     }
 }
 pub fn parse_program(source: &str) -> Vec<Spanned<Statement>> {
     let tokens = Lexer::new(source);
     let mut p = grammar::ProgramParser::new().parse(source, tokens).unwrap();
     for s in &mut p {
-        s.left = 0;
-        s.right = 0;
-        match &mut s.inner {
-            Statement::Expression(e) => {
-                clear_span(e);
-            }
-            Statement::LetBinding(i, e) => {
-                i.left = 0;
-                i.right = 0;
-                clear_span(e);
-            }
-        }
+        clear_stmt_span(s);
     }
     p
 }
@@ -53,7 +61,7 @@ pub fn parse_dbg(s: &str) -> Spanned<Expression> {
     let t = Lexer::new(s);
     println!("{:?}", t.collect::<Vec<_>>());
     let mut e = grammar::ExpressionParser::new().parse(s, tokens).unwrap();
-    clear_span(&mut e);
+    clear_expr_span(&mut e);
     e
 }
 pub fn parse_err(s: &str) -> ParseError<usize, Token<'_>, (usize, Error, usize)> {
@@ -69,6 +77,14 @@ pub fn dummy_span<T>(e: T) -> Spanned<T> {
         inner: e,
     }
 }
+
+pub fn expr_stmt(expr: Spanned<Expression>) -> Spanned<Statement> {
+    dummy_span(Statement::Expression(expr))
+}
+pub fn let_stmt(id: Spanned<Identifier>, expr: Spanned<Expression>) -> Spanned<Statement> {
+    dummy_span(Statement::LetBinding(id, expr))
+}
+
 pub fn un(op_str: &str, e1: Spanned<Expression>) -> Spanned<Expression> {
     let op = match op_str {
         "-" => UnaryOp::Negate,
@@ -113,6 +129,9 @@ pub fn id(s: &str) -> Spanned<Identifier> {
 }
 pub fn expr_id(s: &str) -> Spanned<Expression> {
     dummy_span(Expression::Identifier(Identifier { name: s.into() }))
+}
+pub fn block_stmt(statements: Vec<Spanned<Statement>>) -> Spanned<Statement> {
+    dummy_span(Statement::Block(Block { statements }))
 }
 
 // chunk utility

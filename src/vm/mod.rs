@@ -126,6 +126,9 @@ impl Vm {
                         .ok_or_else(|| RuntimeError::StackOutOfRange)?;
                     std::mem::replace(val, new_val);
                 }
+                Opcode::PopStack => {
+                    self.pop_stack()?;
+                }
                 Opcode::Return => {
                     break;
                 }
@@ -191,6 +194,25 @@ mod test {
         let mut vm = Vm::new(c, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(2).unwrap(), &Value::Integer(5));
+    }
+    #[test]
+    fn vm_stack_pop() {
+        let c = chunk(
+            vec![11, 13, 15],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
+                Instruction::PopStack,
+                Instruction::LoadConstant(2),
+                Instruction::PopStack,
+                Instruction::Return,
+            ],
+        );
+
+        let mut vm = Vm::new(c, Heap::new());
+        assert_eq!(vm.interpret(), Ok(()));
+        assert_eq!(vm.stack.len(), 1);
+        assert_eq!(vm.stack.get(0).unwrap(), &Value::Integer(11))
     }
     #[test]
     fn string_literal() {

@@ -66,15 +66,25 @@ mod test {
         );
     }
     #[test]
+    fn simple_block() {
+        assert_eq!(
+            parse_program("let b = 10; { let xx = 78 + 2; b = xx + 99; }"),
+            vec![
+                let_stmt(id("b"), int(10)),
+                block_stmt(vec![
+                    let_stmt(id("xx"), bin(int(78), "+", int(2))),
+                    expr_stmt(asgn(id("b"), bin(expr_id("xx"), "+", int(99)))),
+                ]),
+            ]
+        );
+    }
+    #[test]
     fn prog_simple() {
         assert_eq!(
             parse_program("let xy = 1 * 2; xy = xy - 11;"),
             vec![
-                dummy_span(Statement::LetBinding(id("xy"), bin(int(1), "*", int(2)))),
-                dummy_span(Statement::Expression(asgn(
-                    id("xy"),
-                    bin(expr_id("xy"), "-", int(11))
-                )))
+                let_stmt(id("xy"), bin(int(1), "*", int(2))),
+                expr_stmt(asgn(id("xy"), bin(expr_id("xy"), "-", int(11))))
             ]
         );
     }

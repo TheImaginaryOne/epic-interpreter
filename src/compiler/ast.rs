@@ -15,12 +15,18 @@ pub struct Identifier {
     pub name: String,
     // todo
 }
+#[derive(Debug, PartialEq)]
+pub struct Block {
+    pub statements: Vec<Spanned<Statement>>,
+}
 ///
 #[derive(Debug, PartialEq)]
 pub enum Statement {
     // let declaration
     LetBinding(Spanned<Identifier>, Spanned<Expression>),
     Expression(Spanned<Expression>),
+    // TODO modify later!
+    Block(Block),
 }
 #[derive(Debug, PartialEq)]
 pub enum Expression {

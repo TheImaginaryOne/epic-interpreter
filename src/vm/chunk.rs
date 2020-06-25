@@ -15,6 +15,7 @@ pub enum Instruction {
     Divide,
     ReadLocal(u8),
     WriteLocal(u8),
+    PopStack,
 }
 #[derive(Primitive)]
 pub enum Opcode {
@@ -25,6 +26,7 @@ pub enum Opcode {
     Divide = 0x04,
     ReadLocal = 0x05,
     WriteLocal = 0x06,
+    PopStack = 0x07,
 }
 #[derive(Debug, PartialEq)]
 pub struct Chunk {
@@ -66,6 +68,7 @@ impl Chunk {
                 self.write_op(Opcode::WriteLocal);
                 self.write_byte(b);
             }
+            Instruction::PopStack => self.write_op(Opcode::PopStack),
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::compiler::ast::{Statement, assign, Identifier, Spanned, Expression, UnaryOp, BinaryOp, Literal, binary, unary, literal};
+use crate::compiler::ast::{Block, Statement, assign, Identifier, Spanned, Expression, UnaryOp, BinaryOp, Literal, binary, unary, literal};
 use std::str::FromStr;
 use crate::compiler::error::Error as CompileError;
 use crate::compiler::lexer::{Lexer, Token};
@@ -43,7 +43,11 @@ Statement: Spanned<Statement> = {
     },
     <l:@L> <e:Expression> ";" <r:@R> => {
         Spanned::new(l, Statement::Expression(e), r)
-    }
+    },
+    Sp<Block> => <>,
+}
+pub Block: Statement = {
+    "{" <s:Statement*> "}" => Statement::Block(Block { statements: s })
 }
 // @L means left location, @R means right location,
 // the parser will add this information into the AST
