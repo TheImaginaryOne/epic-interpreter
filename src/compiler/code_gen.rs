@@ -61,7 +61,7 @@ impl CodeGen {
     fn resolve_local(&self, id: &Identifier) -> Option<u8> {
         for (i, local) in self.locals.iter().rev().enumerate() {
             if id.name == local.name {
-                return Some(i as u8);
+                return Some(self.locals.len() as u8 - 1 - i as u8);
             }
         }
         None
@@ -123,6 +123,35 @@ mod test {
     use crate::vm::chunk::Instruction;
     use crate::vm::heap::Object;
 
+    #[test]
+    fn many_locals() {
+        let ast = vec![
+            Statement::LetBinding(id("xy"), int(12)),
+            Statement::LetBinding(id("xz"), bin(int(2), "+" , expr_id("xy"))),
+            Statement::LetBinding(id("b"), bin(expr_id("xy"), "*", expr_id("xz"))),
+            Statement::LetBinding(id("c"), bin(expr_id("xz"), "/", expr_id("b"))),
+        ];
+
+        let mut code_gen = CodeGen::new();
+        let bytecode = code_gen.generate(&ast);
+        let c = chunk(
+            vec![12, 2],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::ReadLocal(0),
+                Instruction::LoadConstant(1),
+                Instruction::Add,
+                Instruction::ReadLocal(1),
+                Instruction::ReadLocal(0),
+                Instruction::Multiply,
+                Instruction::ReadLocal(2),
+                Instruction::ReadLocal(1),
+                Instruction::Divide,
+                Instruction::Return,
+            ],
+        );
+        assert_eq!(bytecode.unwrap().0, c);
+    }
     // TODO defunct
     #[test]
     fn prog_simple() {
