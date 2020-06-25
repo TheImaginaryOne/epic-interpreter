@@ -53,6 +53,9 @@ impl Chunk {
             bytes: Vec::new(),
         }
     }
+    pub fn next_location(&mut self) -> usize {
+        self.bytes.len()
+    }
     pub fn write_byte(&mut self, b: u8) {
         self.bytes.push(b);
     }
@@ -65,6 +68,12 @@ impl Chunk {
         let b = i.to_be_bytes();
         self.bytes.push(b[0]);
         self.bytes.push(b[1]);
+    }
+    pub fn write_i16_at(&mut self, value: i16, i: usize) {
+        let b = value.to_be_bytes();
+        // unchecked!
+        self.bytes[i] = b[0];
+        self.bytes[i + 1] = b[1];
     }
     pub fn write_op(&mut self, op: Opcode) -> usize {
         self.bytes.push(op as u8);
@@ -144,5 +153,12 @@ mod test {
         c.write_instr(Instruction::JumpIfFalse(0x0a12));
         assert_eq!(c.read_i16(1).unwrap(), 0x1ba8);
         assert_eq!(c.read_i16(4).unwrap(), 0x0a12);
+    }
+    #[test]
+    fn patch_bytes() {
+        let mut c = Chunk::new();
+        c.write_instr(Instruction::Jump(0x1ba8));
+        c.write_i16_at(0x0101, 1);
+        assert_eq!(c.read_i16(1).unwrap(), 0x0101);
     }
 }

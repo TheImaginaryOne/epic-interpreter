@@ -1,4 +1,4 @@
-use super::ast::{BinaryOp, Expression, Identifier, Literal, Spanned, Statement};
+use super::ast::{BinaryOp, Block, Expression, Identifier, IfElse, Literal, Spanned, Statement};
 use crate::vm::chunk::{Chunk, Instruction, Value};
 use crate::vm::heap::{Heap, Object};
 
@@ -27,6 +27,7 @@ struct CodeGen {
     locals: Vec<Local>,
     current_scope: u8,
 }
+#[allow(dead_code)]
 impl CodeGen {
     pub fn new() -> Self {
         Self {
@@ -70,9 +71,7 @@ impl CodeGen {
             Statement::Expression(expr) => self.gen_expression(chunk, heap, &expr)?,
             Statement::Block(block) => {
                 self.current_scope += 1;
-                for statement in &block.statements {
-                    self.gen_statement(chunk, heap, &statement);
-                }
+                self.gen_block(chunk, heap, block)?;
                 for i in (0..self.locals.len()).rev() {
                     if self.locals[i].scope == self.current_scope {
                         self.locals.pop();
@@ -83,9 +82,58 @@ impl CodeGen {
                 }
                 self.current_scope -= 1;
             }
+            Statement::IfElse(if_else) => {
+                let IfElse {
+                    then_clauses,
+                    else_clause,
+                } = if_else.as_ref();
+
+                let mut previous_jump_loc = 0;
+                // the final instruction of each "if ... { ... }" block
+                let mut block_ends = vec![];
+                for (i, (cond, block)) in then_clauses.iter().enumerate() {
+                    // generate the "if ..." expression
+                    let jump_target = chunk.next_location();
+                    if i > 0 {
+                        chunk.write_instr(Instruction::PopStack);
+                    }
+                    self.gen_expression(chunk, heap, cond)?;
+                    let jump_loc = chunk.write_instr(Instruction::JumpIfFalse(0));
+                    chunk.write_instr(Instruction::PopStack);
+
+                    if i > 0 {
+                        // if the previous "if" doesn't exist, jump to start of the next "if"
+                        self.patch_jump(chunk, previous_jump_loc, jump_target);
+                    }
+                    previous_jump_loc = jump_loc;
+
+                    // generate the body
+                    self.gen_block(chunk, heap, &block.inner)?;
+                    let block_end = chunk.write_instr(Instruction::Jump(0));
+                    block_ends.push(block_end);
+                }
+                let else_loc = chunk.next_location();
+                self.patch_jump(chunk, previous_jump_loc, else_loc);
+                chunk.write_instr(Instruction::PopStack);
+                // generate else statement if any exists
+                if let Some(block) = else_clause {
+                    self.gen_block(chunk, heap, &block.inner)?;
+                }
+                // After the if statements are finished, the program must
+                // jump to the end.
+                let final_loc = chunk.next_location();
+                for end in block_ends {
+                    self.patch_jump(chunk, end, final_loc);
+                }
+            }
             _ => todo!(),
         }
         Ok(())
+    }
+    /// Patches a "jump" instruction so it points to a target.
+    fn patch_jump(&self, chunk: &mut Chunk, location: usize, target: usize) {
+        let offset = target as i32 - location as i32 - 3; // TODO?!
+        chunk.write_i16_at(offset as i16, location + 1);
     }
     fn resolve_local(&self, id: &Identifier) -> Option<u8> {
         for (i, local) in self.locals.iter().rev().enumerate() {
@@ -94,6 +142,17 @@ impl CodeGen {
             }
         }
         None
+    }
+    fn gen_block(
+        &mut self,
+        chunk: &mut Chunk,
+        heap: &mut Heap,
+        block: &Block,
+    ) -> Result<(), CodeGenError> {
+        for statement in &block.statements {
+            self.gen_statement(chunk, heap, &statement)?;
+        }
+        Ok(())
     }
     fn gen_expression(
         &mut self,
@@ -148,6 +207,7 @@ impl CodeGen {
     }
 }
 
+// When my tests are longer than the code...
 #[cfg(test)]
 mod test {
     use super::*;
@@ -290,5 +350,124 @@ mod test {
         assert_eq!(bytecode.0, c);
         assert_eq!(bytecode.1.get(0).unwrap(), &Object::String("oof".into()));
         assert_eq!(bytecode.1.get(1).unwrap(), &Object::String("ooo".into()));
+    }
+    // WARNING!! Monster code blocks ahead
+    #[test]
+    fn if_only() {
+        let ast = vec![
+            let_stmt(id("x"), int(0)),
+            let_stmt(id("y"), int(3)),
+            if_stmt(vec![(
+                bin(expr_id("y"), ">", int(1)),
+                block(vec![expr_stmt(asgn(id("x"), int(4)))]),
+            )]),
+        ];
+        let mut code_gen = CodeGen::new();
+        let bytecode = code_gen.generate(&ast).unwrap();
+        let c = chunk(
+            vec![0, 3, 1, 4],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
+                Instruction::LoadConstant(2),
+                Instruction::ReadLocal(1),
+                Instruction::Greater,
+                Instruction::JumpIfFalse(8), //
+                Instruction::PopStack,
+                Instruction::LoadConstant(3),
+                Instruction::WriteLocal(0),
+                Instruction::Jump(1),
+                Instruction::PopStack,
+                Instruction::Return,
+            ],
+        );
+        assert_eq!(bytecode.0, c);
+    }
+    #[test]
+    fn if_else_short() {
+        let ast = vec![
+            let_stmt(id("x"), int(0)),
+            let_stmt(id("y"), int(3)),
+            if_else_stmt(
+                vec![(
+                    bin(expr_id("y"), ">", int(1)),
+                    block(vec![expr_stmt(asgn(id("x"), int(4)))]),
+                )],
+                block(vec![expr_stmt(asgn(id("x"), int(6)))]),
+            ),
+        ];
+        let mut code_gen = CodeGen::new();
+        let bytecode = code_gen.generate(&ast).unwrap();
+        let c = chunk(
+            vec![0, 3, 1, 4, 6],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
+                Instruction::LoadConstant(2),
+                Instruction::ReadLocal(1),
+                Instruction::Greater,
+                Instruction::JumpIfFalse(8), //
+                Instruction::PopStack,
+                Instruction::LoadConstant(3),
+                Instruction::WriteLocal(0),
+                Instruction::Jump(5), //
+                Instruction::PopStack,
+                Instruction::LoadConstant(4),
+                Instruction::WriteLocal(0),
+                Instruction::Return,
+            ],
+        );
+        assert_eq!(bytecode.0, c);
+    }
+    #[test]
+    fn if_else_long() {
+        let ast = vec![
+            let_stmt(id("x"), int(0)),
+            let_stmt(id("y"), int(3)),
+            if_else_stmt(
+                vec![
+                    (
+                        bin(expr_id("y"), ">", int(1)),
+                        block(vec![expr_stmt(asgn(id("x"), int(4)))]),
+                    ),
+                    (
+                        bin(expr_id("y"), "<", int(1)),
+                        block(vec![expr_stmt(asgn(id("x"), int(5)))]),
+                    ),
+                ],
+                block(vec![expr_stmt(asgn(id("x"), int(6)))]),
+            ),
+        ];
+        let mut code_gen = CodeGen::new();
+        let bytecode = code_gen.generate(&ast).unwrap();
+        let c = chunk(
+            vec![0, 3, 1, 4, 1, 5, 6],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
+                Instruction::LoadConstant(2),
+                Instruction::ReadLocal(1),
+                Instruction::Greater,
+                Instruction::JumpIfFalse(8), //
+                Instruction::PopStack,
+                Instruction::LoadConstant(3),
+                Instruction::WriteLocal(0),
+                Instruction::Jump(22), //
+                Instruction::PopStack,
+                Instruction::LoadConstant(4),
+                Instruction::ReadLocal(1),
+                Instruction::Less,
+                Instruction::JumpIfFalse(8), //
+                Instruction::PopStack,
+                Instruction::LoadConstant(5),
+                Instruction::WriteLocal(0),
+                Instruction::Jump(5),
+                Instruction::PopStack,
+                Instruction::LoadConstant(6),
+                Instruction::WriteLocal(0),
+                Instruction::Return,
+            ],
+        );
+        assert_eq!(bytecode.0, c);
     }
 }

@@ -105,6 +105,14 @@ pub fn expr_stmt(expr: Spanned<Expression>) -> Spanned<Statement> {
 pub fn let_stmt(id: Spanned<Identifier>, expr: Spanned<Expression>) -> Spanned<Statement> {
     dummy_span(Statement::LetBinding(id, expr))
 }
+pub fn if_stmt(
+    t: Vec<(Spanned<Expression>, Spanned<Block>)>,
+) -> Spanned<Statement> {
+    dummy_span(Statement::IfElse(Box::new(IfElse {
+        then_clauses: t,
+        else_clause: None,
+    })))
+}
 pub fn if_else_stmt(
     t: Vec<(Spanned<Expression>, Spanned<Block>)>,
     e: Spanned<Block>,

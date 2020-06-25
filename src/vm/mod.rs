@@ -168,7 +168,7 @@ impl Vm {
                     self.pc = Offset::from(offset)
                         .add_to_usize(self.pc)
                         .ok_or_else(|| RuntimeError::JumpOutOfRange)?;
-                },
+                }
                 Opcode::JumpIfFalse => {
                     let offset = self.next_i16()?;
                     let a = self.peek_stack()?;
@@ -181,7 +181,7 @@ impl Vm {
                     } else {
                         Err(RuntimeError::InvalidType)?;
                     }
-                },
+                }
                 Opcode::Greater => {
                     let a = self.pop_stack()?;
                     let b = self.pop_stack()?;
@@ -358,6 +358,9 @@ mod test {
         );
         let mut vm = Vm::new(c, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
-        assert_eq!(vm.stack, vec![Value::Integer(11), Value::Integer(15), Value::Integer(13)])
+        assert_eq!(
+            vm.stack,
+            vec![Value::Integer(11), Value::Integer(15), Value::Integer(13)]
+        )
     }
 }
