@@ -124,7 +124,7 @@ impl CodeGen {
                     BinaryOp::Divide => chunk.write_instr(Instruction::Divide),
                     BinaryOp::Add => chunk.write_instr(Instruction::Add),
                     _ => todo!(),
-                }
+                };
             }
             Expression::Assign(id, e1) => {
                 self.gen_expression(chunk, heap, e1)?;

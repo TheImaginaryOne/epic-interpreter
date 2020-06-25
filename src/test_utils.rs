@@ -174,7 +174,7 @@ pub fn chunk(ints: Vec<i32>, instrs: Vec<Instruction>) -> Chunk {
     let mut c = Chunk::new();
     c.values = ints.iter().map(|x| Value::Integer(*x)).collect();
     for i in instrs {
-        c.write_instr(i)
+        c.write_instr(i);
     }
     c
 }
