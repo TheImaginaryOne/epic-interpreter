@@ -5,6 +5,27 @@ use chunk::{Chunk, Instruction, Opcode, Value};
 use heap::{Heap, Object};
 use num_traits::FromPrimitive;
 
+#[derive(Debug, Copy, Clone)]
+struct Offset(bool, usize);
+impl From<i16> for Offset {
+    fn from(i: i16) -> Self {
+        if i < 0 {
+            Self(true, -i as usize)
+        } else {
+            Self(false, i as usize)
+        }
+    }
+}
+impl Offset {
+    fn add_to_usize(&self, u: usize) -> Option<usize> {
+        if self.0 {
+            u.checked_sub(self.1)
+        } else {
+            u.checked_add(self.1)
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum RuntimeError {
     InvalidOpcode,
@@ -14,6 +35,7 @@ pub enum RuntimeError {
     StackOutOfRange,
     CannotFindConstant,
     CannotFindObject,
+    JumpOutOfRange,
 }
 pub struct Vm {
     heap: Heap,
@@ -32,6 +54,14 @@ impl Vm {
     }
     fn pop_stack(&mut self) -> Result<Value, RuntimeError> {
         let next = self.stack.pop().ok_or_else(|| RuntimeError::StackUnderflow);
+        next
+    }
+    pub fn next_i16(&mut self) -> Result<i16, RuntimeError> {
+        let next = self
+            .chunk
+            .read_i16(self.pc)
+            .ok_or_else(|| RuntimeError::UnexpectedEof);
+        self.pc += 2;
         next
     }
     pub fn next_byte(&mut self) -> Result<u8, RuntimeError> {
@@ -129,6 +159,25 @@ impl Vm {
                 Opcode::PopStack => {
                     self.pop_stack()?;
                 }
+                Opcode::Jump => {
+                    let offset = self.next_i16()?;
+                    self.pc = Offset::from(offset)
+                        .add_to_usize(self.pc)
+                        .ok_or_else(|| RuntimeError::JumpOutOfRange)?;
+                },
+                Opcode::JumpIfFalse => {
+                    let offset = self.next_i16()?;
+                    let a = self.pop_stack()?;
+                    if let Value::Bool(b) = a {
+                        if b {
+                            self.pc = Offset::from(offset)
+                                .add_to_usize(self.pc)
+                                .ok_or_else(|| RuntimeError::JumpOutOfRange)?;
+                        }
+                    } else {
+                        Err(RuntimeError::InvalidType)?;
+                    }
+                },
                 Opcode::Return => {
                     break;
                 }
@@ -243,5 +292,23 @@ mod test {
             ),
             _ => panic!("Stack has {:?}", stack_top),
         }
+    }
+    #[test]
+    fn jump() {
+        let c = chunk(
+            vec![11, 13, 15],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::Jump(5),         //---|
+                Instruction::LoadConstant(1), //<--|--|
+                Instruction::Jump(5),         //---|--|--|
+                Instruction::LoadConstant(2), //<--|  |  |
+                Instruction::Jump(-10),       //------|  |
+                Instruction::Return,          //<--------|
+            ],
+        );
+        let mut vm = Vm::new(c, Heap::new());
+        assert_eq!(vm.interpret(), Ok(()));
+        assert_eq!(vm.stack, vec![Value::Integer(11), Value::Integer(15), Value::Integer(13)])
     }
 }

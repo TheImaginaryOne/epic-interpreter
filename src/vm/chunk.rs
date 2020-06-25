@@ -1,9 +1,11 @@
 use crate::vm::heap::{Handle, Object};
+use crate::vm::Offset;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Integer(i32),
     Float(f32),
+    Bool(bool),
     Object(Handle),
 }
 
@@ -17,6 +19,8 @@ pub enum Instruction {
     ReadLocal(u8),
     WriteLocal(u8),
     PopStack,
+    Jump(i16),
+    JumpIfFalse(i16),
 }
 #[derive(Primitive)]
 pub enum Opcode {
@@ -28,6 +32,8 @@ pub enum Opcode {
     ReadLocal = 0x05,
     WriteLocal = 0x06,
     PopStack = 0x07,
+    Jump = 0x08,
+    JumpIfFalse = 0x09,
 }
 #[derive(Debug, PartialEq)]
 pub struct Chunk {
@@ -43,6 +49,16 @@ impl Chunk {
     }
     pub fn write_byte(&mut self, b: u8) {
         self.bytes.push(b);
+    }
+    pub fn read_i16(&mut self, i: usize) -> Option<i16> {
+        let b = [*self.bytes.get(i)?, *self.bytes.get(i + 1)?];
+        // from big endian bytes
+        Some(i16::from_be_bytes(b))
+    }
+    pub fn write_i16(&mut self, i: i16) {
+        let b = i.to_be_bytes();
+        self.bytes.push(b[0]);
+        self.bytes.push(b[1]);
     }
     pub fn write_op(&mut self, op: Opcode) -> usize {
         self.bytes.push(op as u8);
@@ -74,6 +90,16 @@ impl Chunk {
                 offset
             }
             Instruction::PopStack => self.write_op(Opcode::PopStack),
+            Instruction::Jump(i) => {
+                let offset = self.write_op(Opcode::Jump);
+                self.write_i16(i);
+                offset
+            }
+            Instruction::JumpIfFalse(i) => {
+                let offset = self.write_op(Opcode::JumpIfFalse);
+                self.write_i16(i);
+                offset
+            }
         }
     }
 }
@@ -92,9 +118,19 @@ mod test {
             (6, Instruction::ReadLocal(2)),
             (8, Instruction::WriteLocal(4)),
             (10, Instruction::PopStack),
+            (11, Instruction::Jump(-10)),
+            (14, Instruction::JumpIfFalse(3)),
         ];
         for (offset, i) in instrs {
             assert_eq!(offset, c.write_instr(i.clone()));
         }
+    }
+    #[test]
+    fn write_integers() {
+        let mut c = Chunk::new();
+        c.write_instr(Instruction::Jump(0x1ba8));
+        c.write_instr(Instruction::JumpIfFalse(0x0a12));
+        assert_eq!(c.read_i16(1).unwrap(), 0x1ba8);
+        assert_eq!(c.read_i16(4).unwrap(), 0x0a12);
     }
 }
