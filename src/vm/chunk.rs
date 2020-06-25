@@ -62,7 +62,7 @@ impl Chunk {
             }
             Instruction::Add => self.write_op(Opcode::Add), // subtract is a special case!
             Instruction::Multiply => self.write_op(Opcode::Multiply),
-            Instruction::Divide => self.write_op(Opcode::Multiply),
+            Instruction::Divide => self.write_op(Opcode::Divide),
             Instruction::ReadLocal(b) => {
                 let offset = self.write_op(Opcode::ReadLocal);
                 self.write_byte(b);
