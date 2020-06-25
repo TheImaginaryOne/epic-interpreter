@@ -83,6 +83,7 @@ impl CodeGen {
                 }
                 self.current_scope -= 1;
             }
+            _ => todo!(),
         }
         Ok(())
     }
@@ -230,10 +231,8 @@ mod test {
     #[test]
     fn undefined_variable_block_stmt() {
         let ast = vec![
-            block_stmt(vec![
-                let_stmt(id("bc"), int(3)),
-            ]),
-            expr_stmt(asgn(id("bc"), int(6)))
+            block_stmt(vec![let_stmt(id("bc"), int(3))]),
+            expr_stmt(asgn(id("bc"), int(6))),
         ];
         let err = CodeGen::new().generate(&ast).unwrap_err();
         assert_eq!(err.ty, CodeGenErrorType::UndefinedVariable);

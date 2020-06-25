@@ -10,6 +10,12 @@ impl<T> Spanned<T> {
     }
 }
 
+/// a special block for if/else/else if statements
+#[derive(Debug, PartialEq)]
+pub struct IfElse {
+    pub then_clauses: Vec<(Spanned<Expression>, Spanned<Block>)>,
+    pub else_clause: Option<Spanned<Block>>,
+}
 #[derive(Debug, PartialEq)]
 pub struct Identifier {
     pub name: String,
@@ -27,6 +33,7 @@ pub enum Statement {
     Expression(Spanned<Expression>),
     // TODO modify later!
     Block(Block),
+    IfElse(Box<IfElse>),
 }
 #[derive(Debug, PartialEq)]
 pub enum Expression {

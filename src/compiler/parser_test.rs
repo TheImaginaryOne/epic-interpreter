@@ -88,4 +88,23 @@ mod test {
             ]
         );
     }
+    #[test]
+    fn if_else_simple() {
+        assert_eq!(
+            parse_program("if y > 1 { x = 1; } else if y < 1 { x = 2; } else { x = 3; }"),
+            vec![if_else_stmt(
+                vec![
+                    (
+                        bin(expr_id("y"), ">", int(1)),
+                        block(vec![expr_stmt(asgn(id("x"), int(1)))])
+                    ),
+                    (
+                        bin(expr_id("y"), "<", int(1)),
+                        block(vec![expr_stmt(asgn(id("x"), int(2)))])
+                    )
+                ],
+                block(vec![expr_stmt(asgn(id("x"), int(3)))])
+            ),]
+        );
+    }
 }

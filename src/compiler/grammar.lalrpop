@@ -1,4 +1,4 @@
-use crate::compiler::ast::{Block, Statement, assign, Identifier, Spanned, Expression, UnaryOp, BinaryOp, Literal, binary, unary, literal};
+use crate::compiler::ast::*;
 use std::str::FromStr;
 use crate::compiler::error::Error as CompileError;
 use crate::compiler::lexer::{Lexer, Token};
@@ -31,6 +31,7 @@ extern {
         ">" => Token::Greater,
         "let" => Token::Let,
         "if" => Token::If,
+        "else" => Token::Else,
     }
 }
 
@@ -44,10 +45,33 @@ Statement: Spanned<Statement> = {
     <l:@L> <e:Expression> ";" <r:@R> => {
         Spanned::new(l, Statement::Expression(e), r)
     },
-    Sp<Block> => <>,
+    Sp<IfElseStatement> => <>,
+    Sp<BlockStatement> => <>,
 }
-pub Block: Statement = {
-    "{" <s:Statement*> "}" => Statement::Block(Block { statements: s })
+
+IfStuffElse: (Spanned<Expression>, Spanned<Block>) = {
+    "if" <e:Expression> <b:Sp<Block>> "else" => (e, b)
+}
+IfElseStatement: Statement = {
+    <a:(IfStuffElse)+> <b:(Sp<Block>)> => {
+        Statement::IfElse(Box::new(IfElse {
+            then_clauses: a,
+            else_clause: Some(b),
+        }))
+    },
+    "if" <e:Expression> <b:Sp<Block>>  => {
+        Statement::IfElse(Box::new(IfElse {
+            then_clauses: vec![(e, b)],
+            else_clause: None,
+        }))
+    }
+}
+Block: Block = {
+    "{" <s:Statement*> "}" => Block { statements: s }
+}
+// A Block wrapped in a Statement.
+BlockStatement: Statement = {
+    Block => Statement::Block(<>)
 }
 // @L means left location, @R means right location,
 // the parser will add this information into the AST

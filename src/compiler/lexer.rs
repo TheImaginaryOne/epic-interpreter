@@ -23,6 +23,7 @@ pub enum Token<'a> {
     Greater,
     Let,
     If,
+    Else,
 
     Comment,
     Whitespace,
@@ -107,6 +108,7 @@ impl<'a> Lexer<'a> {
         return match identifier {
             "let" => Ok(Token::Let),
             "if" => Ok(Token::If),
+            "else" => Ok(Token::Else),
             _ => Ok(Token::Identifier(
                 &self.input[self.start_byte..self.next_pos()],
             )),

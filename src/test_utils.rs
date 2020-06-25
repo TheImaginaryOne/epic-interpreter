@@ -46,6 +46,27 @@ pub fn clear_stmt_span(stmt: &mut Spanned<Statement>) {
                 clear_stmt_span(stmt);
             }
         }
+        Statement::IfElse(i) => {
+            let IfElse {
+                then_clauses,
+                else_clause,
+            } = i.as_mut();
+            for (cond, block) in then_clauses {
+                clear_expr_span(cond);
+                block.left = 0;
+                block.right = 0;
+                for stmt in &mut block.inner.statements {
+                    clear_stmt_span(stmt);
+                }
+            }
+            if let Some(b) = else_clause {
+                b.left = 0;
+                b.right = 0;
+                for stmt in &mut b.inner.statements {
+                    clear_stmt_span(stmt);
+                }
+            }
+        }
     }
 }
 pub fn parse_program(source: &str) -> Vec<Spanned<Statement>> {
@@ -84,6 +105,15 @@ pub fn expr_stmt(expr: Spanned<Expression>) -> Spanned<Statement> {
 pub fn let_stmt(id: Spanned<Identifier>, expr: Spanned<Expression>) -> Spanned<Statement> {
     dummy_span(Statement::LetBinding(id, expr))
 }
+pub fn if_else_stmt(
+    t: Vec<(Spanned<Expression>, Spanned<Block>)>,
+    e: Spanned<Block>,
+) -> Spanned<Statement> {
+    dummy_span(Statement::IfElse(Box::new(IfElse {
+        then_clauses: t,
+        else_clause: Some(e),
+    })))
+}
 
 pub fn un(op_str: &str, e1: Spanned<Expression>) -> Spanned<Expression> {
     let op = match op_str {
@@ -110,6 +140,8 @@ pub fn bin(e1: Spanned<Expression>, op_str: &str, e2: Spanned<Expression>) -> Sp
         "-" => BinaryOp::Subtract,
         "*" => BinaryOp::Multiply,
         "/" => BinaryOp::Divide,
+        ">" => BinaryOp::Greater,
+        "<" => BinaryOp::Less,
         _ => unimplemented!(),
     };
     Spanned {
@@ -132,6 +164,9 @@ pub fn expr_id(s: &str) -> Spanned<Expression> {
 }
 pub fn block_stmt(statements: Vec<Spanned<Statement>>) -> Spanned<Statement> {
     dummy_span(Statement::Block(Block { statements }))
+}
+pub fn block(statements: Vec<Spanned<Statement>>) -> Spanned<Block> {
+    dummy_span(Block { statements })
 }
 
 // chunk utility
