@@ -53,13 +53,16 @@ impl Chunk {
             bytes: Vec::new(),
         }
     }
-    pub fn next_location(&mut self) -> usize {
+    pub fn next_location(&self) -> usize {
         self.bytes.len()
+    }
+    pub fn read_byte(&self, i: usize) -> Option<u8> {
+        self.bytes.get(i).copied()
     }
     pub fn write_byte(&mut self, b: u8) {
         self.bytes.push(b);
     }
-    pub fn read_i16(&mut self, i: usize) -> Option<i16> {
+    pub fn read_i16(&self, i: usize) -> Option<i16> {
         let b = [*self.bytes.get(i)?, *self.bytes.get(i + 1)?];
         // from big endian bytes
         Some(i16::from_be_bytes(b))

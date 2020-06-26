@@ -71,9 +71,7 @@ impl Vm {
     pub fn next_byte(&mut self) -> Result<u8, RuntimeError> {
         let next = self
             .chunk
-            .bytes
-            .get(self.pc)
-            .copied() // deref
+            .read_byte(self.pc)
             .ok_or_else(|| RuntimeError::UnexpectedEof);
         self.pc += 1;
         next
