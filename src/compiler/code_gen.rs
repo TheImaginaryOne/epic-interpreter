@@ -1,4 +1,4 @@
-use super::ast::{BinaryOp, Block, Expression, Identifier, IfElse, Literal, Spanned, Statement};
+use super::ast::{UnaryOp, BinaryOp, Block, Expression, Identifier, IfElse, Literal, Spanned, Statement};
 use crate::vm::chunk::{Chunk, Instruction, Value};
 use crate::vm::heap::{Heap, Object};
 
@@ -182,6 +182,7 @@ impl CodeGen {
                     BinaryOp::Multiply => chunk.write_instr(Instruction::Multiply),
                     BinaryOp::Divide => chunk.write_instr(Instruction::Divide),
                     BinaryOp::Add => chunk.write_instr(Instruction::Add),
+                    BinaryOp::Subtract => chunk.write_instr(Instruction::Subtract),
                     BinaryOp::Equal => chunk.write_instr(Instruction::Equal),
                     BinaryOp::Greater => chunk.write_instr(Instruction::Greater),
                     BinaryOp::Less => chunk.write_instr(Instruction::Less),
@@ -200,6 +201,12 @@ impl CodeGen {
                     .resolve_local(&id)
                     .ok_or_else(|| CodeGenError::new(CodeGenErrorType::UndefinedVariable))?;
                 chunk.write_instr(Instruction::ReadLocal(index));
+            }
+            Expression::Unary(op, e1) => {
+                self.gen_expression(chunk, heap, e1.as_ref())?;
+                match op.inner {
+                    UnaryOp::Negate => chunk.write_instr(Instruction::Negate)
+                };
             }
             _ => todo!(),
         }
@@ -244,7 +251,6 @@ mod test {
         );
         assert_eq!(bytecode.unwrap().0, c);
     }
-    // TODO defunct
     #[test]
     fn prog_simple() {
         let ast = vec![
@@ -264,6 +270,24 @@ mod test {
                 Instruction::ReadLocal(0),
                 Instruction::Add,
                 Instruction::WriteLocal(0),
+                Instruction::Return,
+            ],
+        );
+        assert_eq!(bytecode.unwrap().0, c);
+    }
+    #[test]
+    fn unary_simple() {
+        let ast = vec![
+            let_stmt(id("xyx"), un("-", int(2))),
+        ];
+
+        let mut code_gen = CodeGen::new();
+        let bytecode = code_gen.generate(&ast);
+        let c = chunk(
+            vec![2],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::Negate,
                 Instruction::Return,
             ],
         );

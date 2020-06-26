@@ -15,6 +15,8 @@ pub enum Instruction {
     Return,
     LoadConstant(u8),
     Add,
+    Subtract,
+    Negate,
     Multiply,
     Divide,
     ReadLocal(u8),
@@ -28,19 +30,21 @@ pub enum Instruction {
 }
 #[derive(Primitive)]
 pub enum Opcode {
-    Return = 0x00,
-    LoadConstant = 0x01,
-    Add = 0x02, // subtract is a special case!
-    Multiply = 0x03,
-    Divide = 0x04,
-    ReadLocal = 0x05,
-    WriteLocal = 0x06,
-    PopStack = 0x07,
-    Jump = 0x08,
-    JumpIfFalse = 0x09,
-    Equal = 0x0a,
-    Less = 0x0b,
-    Greater = 0x0c,
+    Return = 0,
+    LoadConstant = 1,
+    Add = 2, // subtract is a special case!
+    Multiply = 3,
+    Subtract = 4,
+    Negate = 5,
+    Divide = 6,
+    ReadLocal = 7,
+    WriteLocal = 8,
+    PopStack = 9,
+    Jump = 10,
+    JumpIfFalse = 11,
+    Equal = 12,
+    Less = 13,
+    Greater = 14,
 }
 #[derive(PartialEq)]
 pub struct Chunk {
@@ -95,7 +99,9 @@ impl Chunk {
                 self.write_byte(b);
                 offset
             }
-            Instruction::Add => self.write_op(Opcode::Add), // subtract is a special case!
+            Instruction::Add => self.write_op(Opcode::Add), 
+            Instruction::Subtract => self.write_op(Opcode::Subtract),
+            Instruction::Negate => self.write_op(Opcode::Negate),
             Instruction::Multiply => self.write_op(Opcode::Multiply),
             Instruction::Divide => self.write_op(Opcode::Divide),
             Instruction::ReadLocal(b) => {
@@ -141,6 +147,8 @@ impl std::fmt::Debug for Chunk {
             let (instr, offset) = match op {
                 Opcode::LoadConstant => (Instruction::LoadConstant(self.read_byte(start).unwrap_or(0)), 2),
                 Opcode::Add => (Instruction::Add, 1),
+                Opcode::Subtract => (Instruction::Subtract, 1),
+                Opcode::Negate => (Instruction::Negate, 1),
                 Opcode::Multiply => (Instruction::Multiply, 1),
                 Opcode::Divide => (Instruction::Divide, 1),
                 Opcode::ReadLocal => (Instruction::ReadLocal(self.read_byte(start).unwrap_or(0)), 2),
@@ -180,6 +188,8 @@ mod test {
             (17, Instruction::Greater),
             (18, Instruction::Less),
             (19, Instruction::Equal),
+            (20, Instruction::Subtract),
+            (21, Instruction::Negate),
         ];
         for (offset, i) in instrs {
             assert_eq!(offset, c.write_instr(i.clone()));

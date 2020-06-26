@@ -118,6 +118,15 @@ impl Vm {
                     };
                     self.stack.push(result);
                 }
+                Opcode::Subtract => {
+                    let a = self.pop_stack()?;
+                    let b = self.pop_stack()?;
+                    let result = match (a, b) {
+                        (Value::Integer(x), Value::Integer(y)) => Value::Integer(x - y),
+                        _ => return Err(RuntimeError::InvalidType),
+                    };
+                    self.stack.push(result);
+                }
                 Opcode::Multiply => {
                     let a = self.pop_stack()?;
                     let b = self.pop_stack()?;
@@ -132,6 +141,14 @@ impl Vm {
                     let b = self.pop_stack()?;
                     let result = match (a, b) {
                         (Value::Integer(x), Value::Integer(y)) => Value::Integer(x / y),
+                        _ => return Err(RuntimeError::InvalidType),
+                    };
+                    self.stack.push(result);
+                }
+                Opcode::Negate => {
+                    let a = self.pop_stack()?;
+                    let result = match a {
+                        Value::Integer(x) => Value::Integer(-x),
                         _ => return Err(RuntimeError::InvalidType),
                     };
                     self.stack.push(result);
@@ -237,6 +254,20 @@ mod test {
         let mut vm = Vm::new(c, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(0).unwrap(), &Value::Integer(50));
+    }
+    #[test]
+    fn unary_simple() {
+        let c = chunk(
+            vec![2],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::Negate,
+                Instruction::Return,
+            ],
+        );
+        let mut vm = Vm::new(c, Heap::new());
+        assert_eq!(vm.interpret(), Ok(()));
+        assert_eq!(vm.stack.get(0).unwrap(), &Value::Integer(-2));
     }
     #[test]
     fn vm_stack_1() {
