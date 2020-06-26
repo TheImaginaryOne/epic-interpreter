@@ -21,6 +21,9 @@ pub enum Instruction {
     PopStack,
     Jump(i16),
     JumpIfFalse(i16),
+    Equal,
+    Less,
+    Greater,
 }
 #[derive(Primitive)]
 pub enum Opcode {
@@ -34,6 +37,9 @@ pub enum Opcode {
     PopStack = 0x07,
     Jump = 0x08,
     JumpIfFalse = 0x09,
+    Equal = 0x0a,
+    Less = 0x0b,
+    Greater = 0x0c,
 }
 #[derive(Debug, PartialEq)]
 pub struct Chunk {
@@ -100,6 +106,9 @@ impl Chunk {
                 self.write_i16(i);
                 offset
             }
+            Instruction::Greater => self.write_op(Opcode::Greater),
+            Instruction::Less => self.write_op(Opcode::Less),
+            Instruction::Equal => self.write_op(Opcode::Equal),
         }
     }
 }
@@ -120,6 +129,9 @@ mod test {
             (10, Instruction::PopStack),
             (11, Instruction::Jump(-10)),
             (14, Instruction::JumpIfFalse(3)),
+            (17, Instruction::Greater),
+            (18, Instruction::Less),
+            (19, Instruction::Equal),
         ];
         for (offset, i) in instrs {
             assert_eq!(offset, c.write_instr(i.clone()));

@@ -56,6 +56,10 @@ impl Vm {
         let next = self.stack.pop().ok_or_else(|| RuntimeError::StackUnderflow);
         next
     }
+    fn peek_stack(&mut self) -> Result<&Value, RuntimeError> {
+        let next = self.stack.last().ok_or_else(|| RuntimeError::StackUnderflow);
+        next
+    }
     pub fn next_i16(&mut self) -> Result<i16, RuntimeError> {
         let next = self
             .chunk
@@ -167,9 +171,9 @@ impl Vm {
                 },
                 Opcode::JumpIfFalse => {
                     let offset = self.next_i16()?;
-                    let a = self.pop_stack()?;
+                    let a = self.peek_stack()?;
                     if let Value::Bool(b) = a {
-                        if b {
+                        if !b {
                             self.pc = Offset::from(offset)
                                 .add_to_usize(self.pc)
                                 .ok_or_else(|| RuntimeError::JumpOutOfRange)?;
@@ -178,6 +182,33 @@ impl Vm {
                         Err(RuntimeError::InvalidType)?;
                     }
                 },
+                Opcode::Greater => {
+                    let a = self.pop_stack()?;
+                    let b = self.pop_stack()?;
+                    let result = match (a, b) {
+                        (Value::Integer(x), Value::Integer(y)) => Value::Bool(x > y),
+                        _ => return Err(RuntimeError::InvalidType),
+                    };
+                    self.stack.push(result);
+                }
+                Opcode::Less => {
+                    let a = self.pop_stack()?;
+                    let b = self.pop_stack()?;
+                    let result = match (a, b) {
+                        (Value::Integer(x), Value::Integer(y)) => Value::Bool(x < y),
+                        _ => return Err(RuntimeError::InvalidType),
+                    };
+                    self.stack.push(result);
+                }
+                Opcode::Equal => {
+                    let a = self.pop_stack()?;
+                    let b = self.pop_stack()?;
+                    let result = match (a, b) {
+                        (Value::Integer(x), Value::Integer(y)) => Value::Bool(x == y),
+                        _ => return Err(RuntimeError::InvalidType),
+                    };
+                    self.stack.push(result);
+                }
                 Opcode::Return => {
                     break;
                 }
@@ -292,6 +323,24 @@ mod test {
             ),
             _ => panic!("Stack has {:?}", stack_top),
         }
+    }
+    #[test]
+    fn jump_conditional() {
+        let c = chunk(
+            vec![11, 13, 100, 200],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
+                Instruction::Less,
+                Instruction::JumpIfFalse(2),  //--|
+                Instruction::LoadConstant(2), //  |
+                Instruction::LoadConstant(3), //<-|
+                Instruction::Return,
+            ],
+        );
+        let mut vm = Vm::new(c, Heap::new());
+        assert_eq!(vm.interpret(), Ok(()));
+        assert_eq!(vm.stack, vec![Value::Bool(false), Value::Integer(200)])
     }
     #[test]
     fn jump() {

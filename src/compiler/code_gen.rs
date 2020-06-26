@@ -123,6 +123,9 @@ impl CodeGen {
                     BinaryOp::Multiply => chunk.write_instr(Instruction::Multiply),
                     BinaryOp::Divide => chunk.write_instr(Instruction::Divide),
                     BinaryOp::Add => chunk.write_instr(Instruction::Add),
+                    BinaryOp::Equal => chunk.write_instr(Instruction::Equal),
+                    BinaryOp::Greater => chunk.write_instr(Instruction::Greater),
+                    BinaryOp::Less => chunk.write_instr(Instruction::Less),
                     _ => todo!(),
                 };
             }
