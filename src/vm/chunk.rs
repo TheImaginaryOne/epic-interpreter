@@ -1,5 +1,6 @@
 use crate::vm::heap::{Handle, Object};
 use crate::vm::Offset;
+use num_traits::cast::FromPrimitive;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -41,7 +42,7 @@ pub enum Opcode {
     Less = 0x0b,
     Greater = 0x0c,
 }
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Chunk {
     pub bytes: Vec<u8>,
     pub values: Vec<Value>,
@@ -122,6 +123,41 @@ impl Chunk {
             Instruction::Less => self.write_op(Opcode::Less),
             Instruction::Equal => self.write_op(Opcode::Equal),
         }
+    }
+}
+impl std::fmt::Debug for Chunk {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        let mut pc = 0;
+        write!(f, "[")?;
+        while let Some(next) = self.bytes.get(pc) {
+            let op = match Opcode::from_u8(*next) {
+                Some(x) => x,
+                None => {
+                    continue;
+                }
+            };
+
+            let start = pc + 1; // add one to go to first operand
+            let (instr, offset) = match op {
+                Opcode::LoadConstant => (Instruction::LoadConstant(self.read_byte(start).unwrap_or(0)), 2),
+                Opcode::Add => (Instruction::Add, 1),
+                Opcode::Multiply => (Instruction::Multiply, 1),
+                Opcode::Divide => (Instruction::Divide, 1),
+                Opcode::ReadLocal => (Instruction::ReadLocal(self.read_byte(start).unwrap_or(0)), 2),
+                Opcode::WriteLocal => (Instruction::WriteLocal(self.read_byte(start).unwrap_or(0)), 2),
+                Opcode::PopStack => (Instruction::PopStack, 1),
+                Opcode::Jump => (Instruction::Jump(self.read_i16(start).unwrap_or(0)), 3),
+                Opcode::JumpIfFalse => (Instruction::JumpIfFalse(self.read_i16(start).unwrap_or(0)), 3),
+                Opcode::Greater => (Instruction::Greater, 1),
+                Opcode::Less => (Instruction::Less, 1),
+                Opcode::Equal => (Instruction::Equal, 1),
+                Opcode::Return => (Instruction::Return, 1),
+            };
+            write!(f, "{}: {:?}, ", pc, instr)?;
+            pc += offset;
+        }
+        write!(f, "]")?;
+        Ok(())
     }
 }
 #[cfg(test)]
