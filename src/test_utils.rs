@@ -1,6 +1,7 @@
 /// Utility functions for running tests
 use crate::compiler::ast::*;
 use crate::compiler::error::Error;
+use crate::compiler::parser::Parser;
 use crate::compiler::grammar;
 use crate::compiler::lexer::{Lexer, Token};
 use crate::vm::chunk::*;
@@ -71,17 +72,15 @@ pub fn clear_stmt_span(stmt: &mut Spanned<Statement>) {
 }
 pub fn parse_program(source: &str) -> Vec<Spanned<Statement>> {
     let tokens = Lexer::new(source);
+    // TODO swap
     let mut p = grammar::ProgramParser::new().parse(source, tokens).unwrap();
     for s in &mut p {
         clear_stmt_span(s);
     }
     p
 }
-pub fn parse_dbg(s: &str) -> Spanned<Expression> {
-    let tokens = Lexer::new(s);
-    let t = Lexer::new(s);
-    println!("{:?}", t.collect::<Vec<_>>());
-    let mut e = grammar::ExpressionParser::new().parse(s, tokens).unwrap();
+pub fn parse_dbg(source: &str) -> Spanned<Expression> {
+    let mut e = Parser::new(source).parse_expr().unwrap();
     clear_expr_span(&mut e);
     e
 }

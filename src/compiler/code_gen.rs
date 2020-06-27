@@ -1,4 +1,6 @@
-use super::ast::{UnaryOp, BinaryOp, Block, Expression, Identifier, IfElse, Literal, Spanned, Statement};
+use super::ast::{
+    BinaryOp, Block, Expression, Identifier, IfElse, Literal, Spanned, Statement, UnaryOp,
+};
 use crate::vm::chunk::{Chunk, Instruction, Value};
 use crate::vm::heap::{Heap, Object};
 
@@ -205,7 +207,7 @@ impl CodeGen {
             Expression::Unary(op, e1) => {
                 self.gen_expression(chunk, heap, e1.as_ref())?;
                 match op.inner {
-                    UnaryOp::Negate => chunk.write_instr(Instruction::Negate)
+                    UnaryOp::Negate => chunk.write_instr(Instruction::Negate),
                 };
             }
             _ => todo!(),
@@ -277,9 +279,7 @@ mod test {
     }
     #[test]
     fn unary_simple() {
-        let ast = vec![
-            let_stmt(id("xyx"), un("-", int(2))),
-        ];
+        let ast = vec![let_stmt(id("xyx"), un("-", int(2)))];
 
         let mut code_gen = CodeGen::new();
         let bytecode = code_gen.generate(&ast);
