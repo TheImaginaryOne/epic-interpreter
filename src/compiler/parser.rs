@@ -1,13 +1,19 @@
 use std::iter::Peekable;
 use std::str::FromStr;
 
-use crate::compiler::ast::{BinaryOp, Expression, Literal, Spanned};
+use crate::compiler::ast::{binary, unary, BinaryOp, Expression, Literal, Spanned, UnaryOp};
 use crate::compiler::error::ParseError;
 use crate::compiler::lexer::{Lexer, Token};
 
 pub struct Parser<'a> {
     source: &'a str,
     lexer: Peekable<Lexer<'a>>,
+}
+pub fn prefix_op(token: Token) -> Option<UnaryOp> {
+    Some(match token {
+        Token::Minus => UnaryOp::Negate,
+        _ => return None,
+    })
 }
 pub fn infix_op(token: Token) -> Option<BinaryOp> {
     Some(match token {
@@ -21,6 +27,13 @@ pub fn infix_op(token: Token) -> Option<BinaryOp> {
         _ => return None,
     })
 }
+pub fn prefix_binding_power(token: Token) -> Option<u8> {
+    // (left bp, right bp)
+    match token {
+        Token::Minus => Some(8),
+        _ => None,
+    }
+}
 pub fn infix_binding_power(token: Token) -> Option<(u8, u8)> {
     // (left bp, right bp)
     match token {
@@ -32,6 +45,7 @@ pub fn infix_binding_power(token: Token) -> Option<(u8, u8)> {
         _ => None,
     }
 }
+
 #[allow(dead_code)]
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Self {
@@ -45,28 +59,81 @@ impl<'a> Parser<'a> {
     }
     /// Only use for testing
     pub fn parse_expr(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-        self.expr_binding_power(0)
+        self.parse_expr_binding_power(0)
     }
 
-    fn expr_binding_power(
+    fn next_token(&mut self) -> Result<Spanned<Token>, Spanned<ParseError>> {
+        let token_sp = self
+            .lexer
+            .next()
+            .ok_or_else(|| Spanned::new(0, ParseError::UnexpectedEOF, 0))?
+            .map_err(|e| Spanned::new(e.0, ParseError::LexError(e.1), e.2))?;
+        Ok(Spanned::new(token_sp.0, token_sp.1, token_sp.2))
+    }
+
+    fn expect_token(&mut self, t: Token) -> Result<(), Spanned<ParseError>> {
+        let spanned_token = self.next_token()?;
+        if spanned_token.inner != t {
+            return Err(Spanned::new(
+                spanned_token.left,
+                ParseError::UnexpectedToken,
+                spanned_token.right,
+            ));
+        }
+        Ok(())
+    }
+    fn parse_integer(&self, s: Spanned<Token>) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+        i32::from_str(&self.source[s.left..s.right])
+            .map_err(|_| Spanned::new(s.right, ParseError::CannotParseInteger, s.right))
+            .and_then(|x| {
+                Ok(Spanned::new(
+                    s.left,
+                    Expression::Literal(Literal::Integer(x)),
+                    s.right,
+                ))
+            })
+    }
+    fn parse_unary(
+        &mut self,
+        token_sp: Spanned<Token>,
+    ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+        let left_bp = prefix_binding_power(token_sp.inner).unwrap();
+        let right_expr_sp = self.parse_expr_binding_power(left_bp)?;
+
+        let (l, r) = (token_sp.left, right_expr_sp.right);
+        Ok(unary(
+            l,
+            Spanned::new(
+                token_sp.left,
+                prefix_op(token_sp.inner).unwrap(),
+                token_sp.right,
+            ),
+            right_expr_sp,
+            r,
+        ))
+    }
+
+    fn parse_expr_binding_power(
         &mut self,
         min_bp: u8,
     ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-        let unary = match self.lexer.next() {
-            None => panic!("nani?!"),
-            Some(u) => u.map_err(|e| Spanned::new(e.0, ParseError::LexError(e.1), e.2))?,
-        };
-        let mut left_expr = match unary.1 {
-            Token::Integer => i32::from_str(&self.source[unary.0..unary.2])
-                .map_err(|_| Spanned::new(unary.0, ParseError::CannotParseInteger, unary.2))
-                .and_then(|x| {
-                    Ok(Spanned::new(
-                        unary.0,
-                        Expression::Literal(Literal::Integer(x)),
-                        unary.2,
-                    ))
-                })?,
-            _ => return Err(Spanned::new(unary.0, ParseError::UnexpectedToken, unary.2)),
+        let unary_token = self.next_token()?;
+
+        let mut left_expr_sp = match unary_token.inner {
+            Token::Integer => self.parse_integer(unary_token)?,
+            Token::Minus => self.parse_unary(unary_token)?,
+            Token::LParen => {
+                let expr = self.parse_expr_binding_power(0)?;
+                self.expect_token(Token::RParen)?;
+                expr
+            }
+            _ => {
+                return Err(Spanned::new(
+                    unary_token.left,
+                    ParseError::UnexpectedToken,
+                    unary_token.right,
+                ))
+            }
         };
 
         loop {
@@ -76,32 +143,35 @@ impl<'a> Parser<'a> {
                     .clone()
                     .map_err(|e| Spanned::new(e.0, ParseError::LexError(e.1.clone()), e.2))?,
             };
-            let (lbp, rbp) = infix_binding_power(infix_token.1).ok_or_else(|| {
-                Spanned::new(infix_token.0, ParseError::UnexpectedToken, infix_token.2)
-            })?;
-            if lbp < min_bp {
-                break;
-            }
-            // consume
-            self.lexer.next();
-            let right_expr = self.expr_binding_power(rbp)?;
+            if let Some((left_bp, right_bp)) = infix_binding_power(infix_token.1) {
+                // if left binding power too low
+                if left_bp < min_bp {
+                    break;
+                }
+                // consume infix operator
+                self.lexer.next();
+                // recursively call
+                let right_expr_sp = self.parse_expr_binding_power(right_bp)?;
 
-            let (l, r) = (left_expr.left, right_expr.right);
-            left_expr = Spanned::new(
-                l,
-                Expression::Binary(
-                    Box::new(left_expr),
+                let (l, r) = (left_expr_sp.left, right_expr_sp.right);
+                // construct binary expression
+                left_expr_sp = binary(
+                    l,
+                    left_expr_sp,
                     Spanned::new(
                         infix_token.0,
                         infix_op(infix_token.1).unwrap(),
                         infix_token.2,
                     ),
-                    Box::new(right_expr),
-                ),
-                r,
-            );
+                    right_expr_sp,
+                    r,
+                );
+            } else {
+                // not an infix operator - we can stop
+                break;
+            }
         }
 
-        Ok(left_expr)
+        Ok(left_expr_sp)
     }
 }

@@ -210,10 +210,7 @@ mod test {
         let r = Lexer::new("51 //jeff\n\"y&\"").collect::<Vec<_>>();
         assert_eq!(
             r,
-            vec![
-                Ok((0, Token::Integer, 2)),
-                Ok((10, Token::String, 14)),
-            ]
+            vec![Ok((0, Token::Integer, 2)), Ok((10, Token::String, 14)),]
         );
     }
     #[test]
