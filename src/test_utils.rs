@@ -84,7 +84,7 @@ pub fn parse_dbg(source: &str) -> Spanned<Expression> {
     clear_expr_span(&mut e);
     e
 }
-pub fn parse_err(s: &str) -> ParseError<usize, Token<'_>, (usize, Error, usize)> {
+pub fn parse_err(s: &str) -> ParseError<usize, Token, (usize, Error, usize)> {
     let tokens = Lexer::new(s);
     grammar::ExpressionParser::new()
         .parse(s, tokens)

@@ -10,10 +10,10 @@ extern {
     type Location = usize;
     type Error = (usize, CompileError, usize);
     
-    enum Token<'a> {
-        "string" => Token::String(<&'a str>),
-        "integer" => Token::Integer(<&'a str>),
-        "identifier" => Token::Identifier(<&'a str>),
+    enum Token {
+        "string" => Token::String,
+        "integer" => Token::Integer,
+        "identifier" => Token::Identifier,
 
         "+" => Token::Plus,
         "-" => Token::Minus,
@@ -114,14 +114,14 @@ Sp<R>: Spanned<R> = {
     @L R @R => Spanned::new(<>),
 }
 Integer: Literal = {
-    <l:@L> <i:"integer"> <r:@R> =>? i32::from_str(i)
+    <l:@L> <i:"integer"> <r:@R> =>? i32::from_str("")
             .map_err(|_| ParseError::User {
                 error: (l, CompileError::CannotParseInteger, r)
             })
             .and_then(|x| Ok(Literal::Integer(x)))
 }
 String: Literal = {
-    "string" => Literal::String(<>.into())
+    "string" => Literal::String("".into())
 }
 UnaryOp: UnaryOp = {
     "-" => UnaryOp::Negate
@@ -142,5 +142,5 @@ EqualOp: BinaryOp = {
     "==" => BinaryOp::Equal
 }
 Ident: Identifier = {
-    "identifier" => Identifier { name: <>.into() }
+    "identifier" => Identifier { name: "".into() }
 }

@@ -6,6 +6,7 @@ use crate::compiler::error::ParseError;
 use crate::compiler::lexer::{Lexer, Token};
 
 pub struct Parser<'a> {
+    source: &'a str,
     lexer: Peekable<Lexer<'a>>,
 }
 pub fn infix_op(token: Token) -> Option<BinaryOp> {
@@ -35,6 +36,7 @@ pub fn infix_binding_power(token: Token) -> Option<(u8, u8)> {
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
+            source,
             lexer: Lexer::new(source).peekable(),
         }
     }
@@ -55,7 +57,7 @@ impl<'a> Parser<'a> {
             Some(u) => u.map_err(|e| Spanned::new(e.0, ParseError::LexError(e.1), e.2))?,
         };
         let mut left_expr = match unary.1 {
-            Token::Integer(s) => i32::from_str(s)
+            Token::Integer => i32::from_str(&self.source[unary.0..unary.2])
                 .map_err(|_| Spanned::new(unary.0, ParseError::CannotParseInteger, unary.2))
                 .and_then(|x| {
                     Ok(Spanned::new(
