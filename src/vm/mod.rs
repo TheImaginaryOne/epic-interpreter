@@ -57,7 +57,10 @@ impl Vm {
         next
     }
     fn peek_stack(&mut self) -> Result<&Value, RuntimeError> {
-        let next = self.stack.last().ok_or_else(|| RuntimeError::StackUnderflow);
+        let next = self
+            .stack
+            .last()
+            .ok_or_else(|| RuntimeError::StackUnderflow);
         next
     }
     pub fn next_i16(&mut self) -> Result<i16, RuntimeError> {

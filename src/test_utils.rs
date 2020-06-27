@@ -1,9 +1,9 @@
 /// Utility functions for running tests
 use crate::compiler::ast::*;
 use crate::compiler::error::Error;
-use crate::compiler::parser::Parser;
 use crate::compiler::grammar;
 use crate::compiler::lexer::{Lexer, Token};
+use crate::compiler::parser::Parser;
 use crate::vm::chunk::*;
 use lalrpop_util::*;
 pub fn clear_expr_span(e: &mut Spanned<Expression>) {

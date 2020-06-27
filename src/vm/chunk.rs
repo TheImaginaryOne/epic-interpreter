@@ -99,7 +99,7 @@ impl Chunk {
                 self.write_byte(b);
                 offset
             }
-            Instruction::Add => self.write_op(Opcode::Add), 
+            Instruction::Add => self.write_op(Opcode::Add),
             Instruction::Subtract => self.write_op(Opcode::Subtract),
             Instruction::Negate => self.write_op(Opcode::Negate),
             Instruction::Multiply => self.write_op(Opcode::Multiply),
@@ -145,17 +145,29 @@ impl std::fmt::Debug for Chunk {
 
             let start = pc + 1; // add one to go to first operand
             let (instr, offset) = match op {
-                Opcode::LoadConstant => (Instruction::LoadConstant(self.read_byte(start).unwrap_or(0)), 2),
+                Opcode::LoadConstant => (
+                    Instruction::LoadConstant(self.read_byte(start).unwrap_or(0)),
+                    2,
+                ),
                 Opcode::Add => (Instruction::Add, 1),
                 Opcode::Subtract => (Instruction::Subtract, 1),
                 Opcode::Negate => (Instruction::Negate, 1),
                 Opcode::Multiply => (Instruction::Multiply, 1),
                 Opcode::Divide => (Instruction::Divide, 1),
-                Opcode::ReadLocal => (Instruction::ReadLocal(self.read_byte(start).unwrap_or(0)), 2),
-                Opcode::WriteLocal => (Instruction::WriteLocal(self.read_byte(start).unwrap_or(0)), 2),
+                Opcode::ReadLocal => (
+                    Instruction::ReadLocal(self.read_byte(start).unwrap_or(0)),
+                    2,
+                ),
+                Opcode::WriteLocal => (
+                    Instruction::WriteLocal(self.read_byte(start).unwrap_or(0)),
+                    2,
+                ),
                 Opcode::PopStack => (Instruction::PopStack, 1),
                 Opcode::Jump => (Instruction::Jump(self.read_i16(start).unwrap_or(0)), 3),
-                Opcode::JumpIfFalse => (Instruction::JumpIfFalse(self.read_i16(start).unwrap_or(0)), 3),
+                Opcode::JumpIfFalse => (
+                    Instruction::JumpIfFalse(self.read_i16(start).unwrap_or(0)),
+                    3,
+                ),
                 Opcode::Greater => (Instruction::Greater, 1),
                 Opcode::Less => (Instruction::Less, 1),
                 Opcode::Equal => (Instruction::Equal, 1),
