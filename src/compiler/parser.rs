@@ -191,6 +191,16 @@ impl<'a> Parser<'a> {
                 self.expect_token(Token::RParen)?;
                 expr
             }
+            Token::Identifier => {
+                let (id_left, id_right) = (unary_token_sp.left, unary_token_sp.right);
+                Spanned::new(
+                    id_left,
+                    Expression::Identifier(Identifier {
+                        name: self.source[id_left..id_right].into(),
+                    }),
+                    id_right,
+                )
+            }
             _ => {
                 return Err(Spanned::new(
                     unary_token_sp.left,
