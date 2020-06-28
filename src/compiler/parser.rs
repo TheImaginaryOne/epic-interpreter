@@ -66,7 +66,7 @@ impl<'a> Parser<'a> {
         let token_sp = self
             .lexer
             .next()
-            .ok_or_else(|| Spanned::new(0, ParseError::UnexpectedEOF, 0))?
+            .expect("parser must not pass EOF")
             .map_err(|e| Spanned::new(e.0, ParseError::LexError(e.1), e.2))?;
         Ok(Spanned::new(token_sp.0, token_sp.1, token_sp.2))
     }
@@ -137,12 +137,13 @@ impl<'a> Parser<'a> {
         };
 
         loop {
-            let infix_token = match self.lexer.peek() {
-                None => break,
-                Some(u) => u
-                    .clone()
-                    .map_err(|e| Spanned::new(e.0, ParseError::LexError(e.1.clone()), e.2))?,
-            };
+            let infix_token = self.lexer.peek().expect("parser must not pass EOF")
+                .clone()
+                .map_err(|e| Spanned::new(e.0, ParseError::LexError(e.1.clone()), e.2))?;
+            if infix_token.1 == Token::Eof {
+                break;
+            }
+
             if let Some((left_bp, right_bp)) = infix_binding_power(infix_token.1) {
                 // if left binding power too low
                 if left_bp < min_bp {

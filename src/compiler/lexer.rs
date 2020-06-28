@@ -27,6 +27,8 @@ pub enum Token {
 
     Comment,
     Whitespace,
+
+    Eof, // a dummy token
 }
 
 pub type SpannedToken<T, L, E> = Result<(L, T, L), (L, E, L)>;
@@ -40,6 +42,7 @@ fn is_alphanum_or_underscore(s: char) -> bool {
 }
 
 pub struct Lexer<'a> {
+    done: bool,
     len: usize,
     start_byte: usize,
     input: &'a str,
@@ -48,6 +51,7 @@ pub struct Lexer<'a> {
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
+            done: false,
             len: input.len(),
             start_byte: 0,
             input,
@@ -131,7 +135,16 @@ impl<'a> Iterator for Lexer<'a> {
     type Item = SpannedToken<Token, usize, Error>;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let (start_byte, next_char) = self.input_iter.next()?;
+            let (start_byte, next_char) = if let Some(x) = self.input_iter.next() {
+                x
+            } else {
+                if self.done {
+                    return None
+                } else {
+                    self.done = true;
+                    return Some(Ok((self.len, Token::Eof, self.len)));
+                }
+            };
             self.start_byte = start_byte;
             let token_result = match next_char {
                 '(' => Ok(Token::LParen),
@@ -176,18 +189,19 @@ mod test {
                 Ok((10, Token::Star, 11)),
                 Ok((12, Token::If, 14)),
                 Ok((14, Token::Semicolon, 15)),
+                Ok((15, Token::Eof, 15)),
             ]
         );
     }
     #[test]
     fn empty_str() {
         let r = Lexer::new("\"\"").collect::<Vec<_>>();
-        assert_eq!(r, vec![Ok((0, Token::String, 2))]);
+        assert_eq!(r, vec![Ok((0, Token::String, 2)), Ok((2, Token::Eof, 2))]);
     }
     #[test]
     fn empty() {
         let r = Lexer::new("").collect::<Vec<_>>();
-        assert_eq!(r, vec![]);
+        assert_eq!(r, vec![Ok((0, Token::Eof, 0))]);
     }
     #[test]
     fn arithmetic() {
@@ -202,6 +216,7 @@ mod test {
                 Ok((7, Token::RParen, 8)),
                 Ok((8, Token::Slash, 9)),
                 Ok((9, Token::Integer, 10)),
+                Ok((10, Token::Eof, 10)),
             ]
         );
     }
@@ -210,7 +225,7 @@ mod test {
         let r = Lexer::new("51 //jeff\n\"y&\"").collect::<Vec<_>>();
         assert_eq!(
             r,
-            vec![Ok((0, Token::Integer, 2)), Ok((10, Token::String, 14)),]
+            vec![Ok((0, Token::Integer, 2)), Ok((10, Token::String, 14)), Ok((14, Token::Eof, 14))]
         );
     }
     #[test]
@@ -223,6 +238,7 @@ mod test {
                 Ok((4, Token::Identifier, 8)),
                 Ok((9, Token::Equal, 10)),
                 Err((11, Error::UnterminatedString, 14)),
+                Ok((14, Token::Eof, 14)),
             ]
         );
     }
