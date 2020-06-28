@@ -98,6 +98,13 @@ mod test {
         );
     }
     #[test]
+    fn simple_string() {
+        assert_eq!(
+            parse_dbg("\"jeff\" == \"bob\""),
+            bin(string("jeff"), "==", string("bob"))
+        );
+    }
+    #[test]
     fn bracket() {
         assert_eq!(
             parse_dbg("(10 + 3) / 2"),
