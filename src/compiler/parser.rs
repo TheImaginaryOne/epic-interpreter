@@ -144,7 +144,7 @@ impl<'a> Parser<'a> {
             let message = token_to_string(t);
             return Err(Spanned::new(
                 spanned_token.left,
-                ParseError::UnexpectedToken(t, message),
+                ParseError::UnexpectedToken(spanned_token.inner, message),
                 spanned_token.right,
             ));
         }
