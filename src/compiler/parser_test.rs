@@ -2,7 +2,7 @@
 #[cfg(test)]
 mod test {
     use crate::compiler::ast::*;
-    use crate::compiler::error::{Error, ParseError};
+    use crate::compiler::error::{LexError, ParseError};
     use crate::compiler::lexer::Token;
     use crate::test_utils::*;
     #[test]
@@ -11,7 +11,7 @@ mod test {
         assert_eq!(
             l,
             Spanned {
-                inner: ParseError::LexError(Error::UnexpectedToken),
+                inner: ParseError::LexError(LexError::UnexpectedToken),
                 left: 4,
                 right: 5
             }

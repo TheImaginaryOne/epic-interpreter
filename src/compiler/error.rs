@@ -5,14 +5,11 @@ use crate::compiler::utils::token_to_string;
 
 // TODO rename
 #[derive(Debug, PartialEq, Clone, Error)]
-pub enum Error {
+pub enum LexError {
     #[error("unexpected token")]
     UnexpectedToken,
     #[error("unterminated string")]
     UnterminatedString,
-    // TODO remove
-    #[error("")]
-    CannotParseInteger,
 }
 
 #[derive(Debug, PartialEq, Error)]
@@ -23,7 +20,7 @@ pub enum ParseError {
     #[error("unexpected {}, expected {1}", token_to_string(*.0))]
     UnexpectedToken(Token, String),
     #[error("lex error: {0}")]
-    LexError(#[from] Error),
+    LexError(#[from] LexError),
     #[error("invalid assignment target")]
     InvalidAssignment,
 }

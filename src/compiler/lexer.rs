@@ -1,4 +1,5 @@
-use crate::compiler::error::Error;
+use crate::compiler::ast::Spanned;
+use crate::compiler::error::LexError;
 use std::iter::Peekable;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -31,8 +32,6 @@ pub enum Token {
     Eof, // a dummy token
 }
 
-pub type SpannedToken<T, L, E> = Result<(L, T, L), (L, E, L)>;
-
 fn is_whitespace(s: char) -> bool {
     s == '\n' || s == ' ' || s == '\r' || s == '\t'
 }
@@ -63,11 +62,11 @@ impl<'a> Lexer<'a> {
     /// Make a token from the given token type, or an error.
     fn wrap_token_result(
         &mut self,
-        result: Result<Token, Error>,
-    ) -> Result<(usize, Token, usize), (usize, Error, usize)> {
+        result: Result<Token, LexError>,
+    ) -> Result<Spanned<Token>, Spanned<LexError>> {
         match result {
-            Ok(t) => Ok((self.start_byte, t, self.next_pos())),
-            Err(e) => Err((self.start_byte, e, self.next_pos())),
+            Ok(t) => Ok(Spanned::new(self.start_byte, t, self.next_pos())),
+            Err(e) => Err(Spanned::new(self.start_byte, e, self.next_pos())),
         }
     }
     fn next_pos(&mut self) -> usize {
@@ -92,21 +91,21 @@ impl<'a> Lexer<'a> {
         }
         false
     }
-    fn process_equal(&mut self) -> Result<Token, Error> {
+    fn process_equal(&mut self) -> Result<Token, LexError> {
         if self.advance_if_next_is('=') {
             self.input_iter.next();
             return Ok(Token::DoubleEqual);
         }
         Ok(Token::Equal)
     }
-    fn process_slash(&mut self) -> Result<Token, Error> {
+    fn process_slash(&mut self) -> Result<Token, LexError> {
         if self.advance_if_next_is('/') {
             self.advance_while(&|c| c != '\n');
             return Ok(Token::Comment);
         }
         Ok(Token::Slash)
     }
-    fn process_alpha(&mut self) -> Result<Token, Error> {
+    fn process_alpha(&mut self) -> Result<Token, LexError> {
         self.advance_while(&is_alphanum_or_underscore);
         let identifier = &self.input[self.start_byte..self.next_pos()];
         return match identifier {
@@ -116,23 +115,23 @@ impl<'a> Lexer<'a> {
             _ => Ok(Token::Identifier),
         };
     }
-    fn process_digit(&mut self) -> Result<Token, Error> {
+    fn process_digit(&mut self) -> Result<Token, LexError> {
         // TODO handle float
         self.advance_while(&|c| c.is_ascii_digit());
         Ok(Token::Integer)
     }
-    fn process_double_quote(&mut self) -> Result<Token, Error> {
+    fn process_double_quote(&mut self) -> Result<Token, LexError> {
         // TODO handle escape
         self.advance_while(&|c| c != '"');
         if let None = self.input_iter.next() {
-            Err(Error::UnterminatedString)
+            Err(LexError::UnterminatedString)
         } else {
             Ok(Token::String)
         }
     }
 }
 impl<'a> Iterator for Lexer<'a> {
-    type Item = SpannedToken<Token, usize, Error>;
+    type Item = Result<Spanned<Token>, Spanned<LexError>>;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let (start_byte, next_char) = if let Some(x) = self.input_iter.next() {
@@ -142,7 +141,7 @@ impl<'a> Iterator for Lexer<'a> {
                     return None;
                 } else {
                     self.done = true;
-                    return Some(Ok((self.len, Token::Eof, self.len)));
+                    return Some(Ok(Spanned::new(self.len, Token::Eof, self.len)));
                 }
             };
             self.start_byte = start_byte;
@@ -165,7 +164,7 @@ impl<'a> Iterator for Lexer<'a> {
 
                 //c if is_alpha_or_underscore(c) => self.process_identifier(),
                 c if is_whitespace(c) => Ok(Token::Whitespace),
-                _ => Err(Error::UnexpectedToken),
+                _ => Err(LexError::UnexpectedToken),
             };
             if token_result == Ok(Token::Whitespace) || token_result == Ok(Token::Comment) {
                 continue;
@@ -183,25 +182,31 @@ mod test {
         assert_eq!(
             r,
             vec![
-                Ok((0, Token::Let, 3)),
-                Ok((4, Token::Identifier, 7)),
-                Ok((8, Token::Equal, 9)),
-                Ok((10, Token::Star, 11)),
-                Ok((12, Token::If, 14)),
-                Ok((14, Token::Semicolon, 15)),
-                Ok((15, Token::Eof, 15)),
+                Ok(Spanned::new(0, Token::Let, 3)),
+                Ok(Spanned::new(4, Token::Identifier, 7)),
+                Ok(Spanned::new(8, Token::Equal, 9)),
+                Ok(Spanned::new(10, Token::Star, 11)),
+                Ok(Spanned::new(12, Token::If, 14)),
+                Ok(Spanned::new(14, Token::Semicolon, 15)),
+                Ok(Spanned::new(15, Token::Eof, 15)),
             ]
         );
     }
     #[test]
     fn empty_str() {
         let r = Lexer::new("\"\"").collect::<Vec<_>>();
-        assert_eq!(r, vec![Ok((0, Token::String, 2)), Ok((2, Token::Eof, 2))]);
+        assert_eq!(
+            r,
+            vec![
+                Ok(Spanned::new(0, Token::String, 2)),
+                Ok(Spanned::new(2, Token::Eof, 2))
+            ]
+        );
     }
     #[test]
     fn empty() {
         let r = Lexer::new("").collect::<Vec<_>>();
-        assert_eq!(r, vec![Ok((0, Token::Eof, 0))]);
+        assert_eq!(r, vec![Ok(Spanned::new(0, Token::Eof, 0))]);
     }
     #[test]
     fn arithmetic() {
@@ -209,14 +214,14 @@ mod test {
         assert_eq!(
             r,
             vec![
-                Ok((0, Token::LParen, 1)),
-                Ok((1, Token::Integer, 2)),
-                Ok((3, Token::Plus, 4)),
-                Ok((5, Token::Integer, 7)),
-                Ok((7, Token::RParen, 8)),
-                Ok((8, Token::Slash, 9)),
-                Ok((9, Token::Integer, 10)),
-                Ok((10, Token::Eof, 10)),
+                Ok(Spanned::new(0, Token::LParen, 1)),
+                Ok(Spanned::new(1, Token::Integer, 2)),
+                Ok(Spanned::new(3, Token::Plus, 4)),
+                Ok(Spanned::new(5, Token::Integer, 7)),
+                Ok(Spanned::new(7, Token::RParen, 8)),
+                Ok(Spanned::new(8, Token::Slash, 9)),
+                Ok(Spanned::new(9, Token::Integer, 10)),
+                Ok(Spanned::new(10, Token::Eof, 10)),
             ]
         );
     }
@@ -226,9 +231,9 @@ mod test {
         assert_eq!(
             r,
             vec![
-                Ok((0, Token::Integer, 2)),
-                Ok((10, Token::String, 14)),
-                Ok((14, Token::Eof, 14))
+                Ok(Spanned::new(0, Token::Integer, 2)),
+                Ok(Spanned::new(10, Token::String, 14)),
+                Ok(Spanned::new(14, Token::Eof, 14))
             ]
         );
     }
@@ -238,11 +243,11 @@ mod test {
         assert_eq!(
             r,
             vec![
-                Ok((0, Token::Let, 3)),
-                Ok((4, Token::Identifier, 8)),
-                Ok((9, Token::Equal, 10)),
-                Err((11, Error::UnterminatedString, 14)),
-                Ok((14, Token::Eof, 14)),
+                Ok(Spanned::new(0, Token::Let, 3)),
+                Ok(Spanned::new(4, Token::Identifier, 8)),
+                Ok(Spanned::new(9, Token::Equal, 10)),
+                Err(Spanned::new(11, LexError::UnterminatedString, 14)),
+                Ok(Spanned::new(14, Token::Eof, 14)),
             ]
         );
     }

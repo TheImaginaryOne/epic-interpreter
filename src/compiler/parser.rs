@@ -63,7 +63,7 @@ impl<'a> Parser<'a> {
         let mut errors = Vec::new();
         loop {
             if let Ok(token_sp) = self.lexer.peek().unwrap() {
-                if token_sp.1 == Token::Eof {
+                if token_sp.inner == Token::Eof {
                     break;
                 }
             }
@@ -123,21 +123,19 @@ impl<'a> Parser<'a> {
     }
 
     fn peek_token(&mut self) -> Result<Spanned<Token>, Spanned<ParseError>> {
-        let token_sp = self
+        Ok(self
             .lexer
             .peek()
             .expect("parser must not pass EOF")
             .clone()
-            .map_err(|e| Spanned::new(e.0, ParseError::LexError(e.1), e.2))?;
-        Ok(Spanned::new(token_sp.0, token_sp.1, token_sp.2))
+            .map_err(|e| Spanned::new(e.left, ParseError::LexError(e.inner), e.right))?)
     }
     fn next_token(&mut self) -> Result<Spanned<Token>, Spanned<ParseError>> {
-        let token_sp = self
+        Ok(self
             .lexer
             .next()
             .expect("parser must not pass EOF")
-            .map_err(|e| Spanned::new(e.0, ParseError::LexError(e.1), e.2))?;
-        Ok(Spanned::new(token_sp.0, token_sp.1, token_sp.2))
+            .map_err(|e| Spanned::new(e.left, ParseError::LexError(e.inner), e.right))?)
     }
 
     fn expect_token(&mut self, t: Token) -> Result<Spanned<Token>, Spanned<ParseError>> {
