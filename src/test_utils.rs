@@ -1,6 +1,6 @@
 /// Utility functions for running tests
 use crate::compiler::ast::*;
-use crate::compiler::error::Error;
+use crate::compiler::error::ParseError;
 use crate::compiler::grammar;
 use crate::compiler::lexer::{Lexer, Token};
 use crate::compiler::parser::Parser;
@@ -84,11 +84,9 @@ pub fn parse_dbg(source: &str) -> Spanned<Expression> {
     clear_expr_span(&mut e);
     e
 }
-pub fn parse_err(s: &str) -> ParseError<usize, Token, (usize, Error, usize)> {
+pub fn parse_err(s: &str) -> Spanned<ParseError> {
     let tokens = Lexer::new(s);
-    grammar::ExpressionParser::new()
-        .parse(s, tokens)
-        .unwrap_err()
+    Parser::new(s).parse_expr().unwrap_err()
 }
 pub fn dummy_span<T>(e: T) -> Spanned<T> {
     Spanned {

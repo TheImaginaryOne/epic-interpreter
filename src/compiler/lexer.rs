@@ -139,7 +139,7 @@ impl<'a> Iterator for Lexer<'a> {
                 x
             } else {
                 if self.done {
-                    return None
+                    return None;
                 } else {
                     self.done = true;
                     return Some(Ok((self.len, Token::Eof, self.len)));
@@ -225,7 +225,11 @@ mod test {
         let r = Lexer::new("51 //jeff\n\"y&\"").collect::<Vec<_>>();
         assert_eq!(
             r,
-            vec![Ok((0, Token::Integer, 2)), Ok((10, Token::String, 14)), Ok((14, Token::Eof, 14))]
+            vec![
+                Ok((0, Token::Integer, 2)),
+                Ok((10, Token::String, 14)),
+                Ok((14, Token::Eof, 14))
+            ]
         );
     }
     #[test]

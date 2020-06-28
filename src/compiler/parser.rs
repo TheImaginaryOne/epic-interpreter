@@ -4,6 +4,7 @@ use std::str::FromStr;
 use crate::compiler::ast::{binary, unary, BinaryOp, Expression, Literal, Spanned, UnaryOp};
 use crate::compiler::error::ParseError;
 use crate::compiler::lexer::{Lexer, Token};
+use crate::compiler::utils::token_to_string;
 
 pub struct Parser<'a> {
     source: &'a str,
@@ -74,9 +75,10 @@ impl<'a> Parser<'a> {
     fn expect_token(&mut self, t: Token) -> Result<(), Spanned<ParseError>> {
         let spanned_token = self.next_token()?;
         if spanned_token.inner != t {
+            let message = token_to_string(t);
             return Err(Spanned::new(
                 spanned_token.left,
-                ParseError::UnexpectedToken,
+                ParseError::UnexpectedToken(t, message),
                 spanned_token.right,
             ));
         }
@@ -84,7 +86,7 @@ impl<'a> Parser<'a> {
     }
     fn parse_integer(&self, s: Spanned<Token>) -> Result<Spanned<Expression>, Spanned<ParseError>> {
         i32::from_str(&self.source[s.left..s.right])
-            .map_err(|_| Spanned::new(s.right, ParseError::CannotParseInteger, s.right))
+            .map_err(|_| Spanned::new(s.left, ParseError::CannotParseInteger, s.right))
             .and_then(|x| {
                 Ok(Spanned::new(
                     s.left,
@@ -117,11 +119,11 @@ impl<'a> Parser<'a> {
         &mut self,
         min_bp: u8,
     ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-        let unary_token = self.next_token()?;
+        let unary_token_sp = self.next_token()?;
 
-        let mut left_expr_sp = match unary_token.inner {
-            Token::Integer => self.parse_integer(unary_token)?,
-            Token::Minus => self.parse_unary(unary_token)?,
+        let mut left_expr_sp = match unary_token_sp.inner {
+            Token::Integer => self.parse_integer(unary_token_sp)?,
+            Token::Minus => self.parse_unary(unary_token_sp)?,
             Token::LParen => {
                 let expr = self.parse_expr_binding_power(0)?;
                 self.expect_token(Token::RParen)?;
@@ -129,15 +131,18 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 return Err(Spanned::new(
-                    unary_token.left,
-                    ParseError::UnexpectedToken,
-                    unary_token.right,
+                    unary_token_sp.left,
+                    ParseError::UnexpectedToken(unary_token_sp.inner, "expression".into()),
+                    unary_token_sp.right,
                 ))
             }
         };
 
         loop {
-            let infix_token = self.lexer.peek().expect("parser must not pass EOF")
+            let infix_token = self
+                .lexer
+                .peek()
+                .expect("parser must not pass EOF")
                 .clone()
                 .map_err(|e| Spanned::new(e.0, ParseError::LexError(e.1.clone()), e.2))?;
             if infix_token.1 == Token::Eof {

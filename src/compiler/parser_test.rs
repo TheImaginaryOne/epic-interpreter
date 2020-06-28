@@ -2,36 +2,56 @@
 #[cfg(test)]
 mod test {
     use crate::compiler::ast::*;
-    use crate::compiler::error::Error;
+    use crate::compiler::error::{Error, ParseError};
+    use crate::compiler::lexer::Token;
     use crate::test_utils::*;
-    use lalrpop_util::*;
+    #[test]
+    fn lex_invalid() {
+        let l = parse_err("1 * ~");
+        assert_eq!(
+            l,
+            Spanned {
+                inner: ParseError::LexError(Error::UnexpectedToken),
+                left: 4,
+                right: 5
+            }
+        );
+    }
     #[test]
     fn unexpected() {
         let l = parse_err("1 * 3 + /");
-        match l {
-            ParseError::UnrecognizedToken { token, .. } => {
-                // start, end
-                assert_eq!(token.0, 8);
-                assert_eq!(token.2, 9);
+        assert_eq!(
+            l,
+            Spanned {
+                inner: ParseError::UnexpectedToken(Token::Slash, "expression".into()),
+                left: 8,
+                right: 9
             }
-            _ => panic!(),
-        }
+        );
     }
     #[test]
     fn out_of_range() {
         let l = parse_err("178998662548746775989486268475244265837474723410000118");
-        match l {
-            ParseError::User { error, .. } => assert_eq!(error.1, Error::CannotParseInteger),
-            _ => panic!(),
-        }
+        assert_eq!(
+            l,
+            Spanned {
+                inner: ParseError::CannotParseInteger,
+                left: 0,
+                right: 54
+            }
+        );
     }
     #[test]
     fn eof() {
         let l = parse_err("1 * 3 +");
-        match l {
-            ParseError::UnrecognizedEOF { location, .. } => assert_eq!(location, 7),
-            _ => panic!(),
-        }
+        assert_eq!(
+            l,
+            Spanned {
+                inner: ParseError::UnexpectedToken(Token::Eof, "expression".into()),
+                left: 7,
+                right: 7
+            }
+        );
     }
     #[test]
     fn left_assoc_1() {
