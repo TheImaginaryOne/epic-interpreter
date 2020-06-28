@@ -24,4 +24,6 @@ pub enum ParseError {
     UnexpectedToken(Token, String),
     #[error("lex error: {0}")]
     LexError(#[from] Error),
+    #[error("invalid assignment target")]
+    InvalidAssignment,
 }

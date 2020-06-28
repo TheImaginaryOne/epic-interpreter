@@ -2,7 +2,7 @@ use std::iter::Peekable;
 use std::str::FromStr;
 
 use crate::compiler::ast::{
-    binary, unary, BinaryOp, Expression, Identifier, Literal, Spanned, Statement, UnaryOp,
+    assign, binary, unary, BinaryOp, Expression, Identifier, Literal, Spanned, Statement, UnaryOp,
 };
 use crate::compiler::error::ParseError;
 use crate::compiler::lexer::{Lexer, Token};
@@ -40,7 +40,8 @@ pub fn prefix_binding_power(token: Token) -> Option<u8> {
 pub fn infix_binding_power(token: Token) -> Option<(u8, u8)> {
     // (left bp, right bp)
     match token {
-        Token::DoubleEqual => Some((0, 1)),
+        Token::Equal => Some((0, 1)),
+        Token::DoubleEqual => Some((2, 3)),
         // todo add || and &&
         Token::Less | Token::Greater => Some((4, 5)),
         Token::Plus | Token::Minus => Some((6, 7)),
@@ -79,10 +80,11 @@ impl<'a> Parser<'a> {
         }
     }
     pub fn parse_statement(&mut self) -> Result<Spanned<Statement>, Spanned<ParseError>> {
-        let token_sp = self.next_token()?;
+        let token_sp = self.peek_token()?;
 
         let stmt = match token_sp.inner {
             Token::Let => {
+                self.next_token()?;
                 let identifier = self.expect_token(Token::Identifier)?;
                 self.expect_token(Token::Equal)?;
 
@@ -105,16 +107,11 @@ impl<'a> Parser<'a> {
                     expr_right,
                 )
             }
-            _ => {
-                return Err(Spanned::new(
-                    token_sp.left,
-                    ParseError::UnexpectedToken(
-                        token_sp.inner,
-                        "`let`, `if`, `{` (block start)".into(),
-                    ),
-                    token_sp.right,
-                ))
-            }
+            // expression statement
+            _ => self.parse_expr().and_then(|e| {
+                let r = e.right;
+                Ok(Spanned::new(e.left, Statement::Expression(e), r))
+            })?,
         };
         self.expect_token(Token::Semicolon)?;
         Ok(stmt)
@@ -125,6 +122,15 @@ impl<'a> Parser<'a> {
         self.parse_expr_binding_power(0)
     }
 
+    fn peek_token(&mut self) -> Result<Spanned<Token>, Spanned<ParseError>> {
+        let token_sp = self
+            .lexer
+            .peek()
+            .expect("parser must not pass EOF")
+            .clone()
+            .map_err(|e| Spanned::new(e.0, ParseError::LexError(e.1), e.2))?;
+        Ok(Spanned::new(token_sp.0, token_sp.1, token_sp.2))
+    }
     fn next_token(&mut self) -> Result<Spanned<Token>, Spanned<ParseError>> {
         let token_sp = self
             .lexer
@@ -211,17 +217,12 @@ impl<'a> Parser<'a> {
         };
 
         loop {
-            let infix_token = self
-                .lexer
-                .peek()
-                .expect("parser must not pass EOF")
-                .clone()
-                .map_err(|e| Spanned::new(e.0, ParseError::LexError(e.1.clone()), e.2))?;
-            if infix_token.1 == Token::Eof {
+            let infix_token_sp = self.peek_token()?;
+            if infix_token_sp.inner == Token::Eof {
                 break;
             }
 
-            if let Some((left_bp, right_bp)) = infix_binding_power(infix_token.1) {
+            if let Some((left_bp, right_bp)) = infix_binding_power(infix_token_sp.inner) {
                 // if left binding power too low
                 if left_bp < min_bp {
                     break;
@@ -232,18 +233,38 @@ impl<'a> Parser<'a> {
                 let right_expr_sp = self.parse_expr_binding_power(right_bp)?;
 
                 let (l, r) = (left_expr_sp.left, right_expr_sp.right);
-                // construct binary expression
-                left_expr_sp = binary(
-                    l,
-                    left_expr_sp,
-                    Spanned::new(
-                        infix_token.0,
-                        infix_op(infix_token.1).unwrap(),
-                        infix_token.2,
-                    ),
-                    right_expr_sp,
-                    r,
-                );
+
+                if infix_token_sp.inner == Token::Equal {
+                    // case for expressions like x = 889 + 77
+                    if let Expression::Identifier(i) = left_expr_sp.inner {
+                        let right = right_expr_sp.right;
+                        left_expr_sp = assign(
+                            left_expr_sp.left,
+                            Spanned::new(left_expr_sp.left, i, left_expr_sp.right),
+                            right_expr_sp,
+                            right,
+                        );
+                    } else {
+                        return Err(Spanned::new(
+                            left_expr_sp.left,
+                            ParseError::InvalidAssignment,
+                            right_expr_sp.right,
+                        ));
+                    }
+                } else {
+                    // construct binary expression
+                    left_expr_sp = binary(
+                        l,
+                        left_expr_sp,
+                        Spanned::new(
+                            infix_token_sp.left,
+                            infix_op(infix_token_sp.inner).unwrap(),
+                            infix_token_sp.right,
+                        ),
+                        right_expr_sp,
+                        r,
+                    );
+                }
             } else {
                 // not an infix operator - we can stop
                 break;

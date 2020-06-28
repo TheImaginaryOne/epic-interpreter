@@ -30,6 +30,25 @@ mod test {
         );
     }
     #[test]
+    fn simple_assignment() {
+        assert_eq!(
+            parse_dbg("x = 78 - 99"),
+            asgn(id("x"), bin(int(78), "-", int(99)))
+        );
+    }
+    #[test]
+    fn bad_assignment() {
+        let l = parse_err("xy - yz = 50 + 8;");
+        assert_eq!(
+            l,
+            Spanned {
+                inner: ParseError::InvalidAssignment,
+                left: 0,
+                right: 16
+            }
+        );
+    }
+    #[test]
     fn out_of_range() {
         let l = parse_err("178998662548746775989486268475244265837474723410000118");
         assert_eq!(
