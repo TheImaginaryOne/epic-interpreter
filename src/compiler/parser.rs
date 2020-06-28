@@ -67,10 +67,8 @@ impl<'a> Parser<'a> {
                     break;
                 }
             }
-
-            match self.parse_statement() {
-                Ok(s) => statements.push(s),
-                Err(e) => errors.push(e), // todo
+            if let Ok(s) = self.parse_statement(&mut errors) {
+                statements.push(s);
             }
         }
         if errors.len() > 0 {
@@ -79,42 +77,74 @@ impl<'a> Parser<'a> {
             Ok(statements)
         }
     }
-    pub fn parse_statement(&mut self) -> Result<Spanned<Statement>, Spanned<ParseError>> {
-        let token_sp = self.peek_token()?;
+    fn parse_let(&mut self) -> Result<Spanned<Statement>, Spanned<ParseError>> {
+        self.next_token()?;
+        let identifier = self.expect_token(Token::Identifier)?;
+        self.expect_token(Token::Equal)?;
 
-        let stmt = match token_sp.inner {
-            Token::Let => {
-                self.next_token()?;
-                let identifier = self.expect_token(Token::Identifier)?;
-                self.expect_token(Token::Equal)?;
+        let expr = self.parse_expr()?;
 
-                let expr = self.parse_expr()?;
-
-                let (id_left, id_right) = (identifier.left, identifier.right);
-                let expr_right = expr.right;
+        let (id_left, id_right) = (identifier.left, identifier.right);
+        let expr_right = expr.right;
+        self.expect_token(Token::Semicolon)?;
+        Ok(Spanned::new(
+            id_left,
+            Statement::LetBinding(
                 Spanned::new(
                     id_left,
-                    Statement::LetBinding(
-                        Spanned::new(
-                            id_left,
-                            Identifier {
-                                name: self.source[id_left..id_right].into(),
-                            },
-                            id_right,
-                        ),
-                        expr,
-                    ),
-                    expr_right,
-                )
+                    Identifier {
+                        name: self.source[id_left..id_right].into(),
+                    },
+                    id_right,
+                ),
+                expr,
+            ),
+            expr_right,
+        ))
+    }
+
+    /// Recover if there is an error
+    fn synchronise(&mut self) {
+        loop {
+            let token_result = self.peek_token().map(|t| t.inner);
+            if let Ok(token_sp) = token_result {
+                match token_sp {
+                    Token::Eof | Token::Let/* | Token::If */ => break,
+                    Token::Semicolon => {
+                        self.next_token().unwrap();
+                        break;
+                    }
+                    _ => {
+                        self.next_token().unwrap();
+                    }
+                }
             }
-            // expression statement
-            _ => self.parse_expr().and_then(|e| {
-                let r = e.right;
-                Ok(Spanned::new(e.left, Statement::Expression(e), r))
-            })?,
-        };
-        self.expect_token(Token::Semicolon)?;
-        Ok(stmt)
+        }
+    }
+    pub fn parse_statement(
+        &mut self,
+        errors: &mut Vec<Spanned<ParseError>>,
+    ) -> Result<Spanned<Statement>, ()> {
+        let stmt = self.peek_token().and_then(|t| {
+            match t.inner {
+                Token::Let => self.parse_let(),
+                // expression statement
+                _ => self.parse_expr().and_then(|expr| {
+                    let r = expr.right;
+                    self.expect_token(Token::Semicolon)?;
+                    Ok(Spanned::new(expr.left, Statement::Expression(expr), r))
+                }),
+            }
+        });
+        match stmt {
+            Ok(s) => return Ok(s),
+            Err(e) => {
+                errors.push(e);
+                self.synchronise();
+                // todo error synchronise
+                return Err(());
+            }
+        }
     }
 
     /// Only use for testing
@@ -138,8 +168,9 @@ impl<'a> Parser<'a> {
             .map_err(|e| Spanned::new(e.left, ParseError::LexError(e.inner), e.right))?)
     }
 
+    /// If the token is the required one, it is consumed, otherwise the function returns an error.
     fn expect_token(&mut self, t: Token) -> Result<Spanned<Token>, Spanned<ParseError>> {
-        let spanned_token = self.next_token()?;
+        let spanned_token = self.peek_token()?;
         if spanned_token.inner != t {
             let message = token_to_string(t);
             return Err(Spanned::new(
@@ -148,6 +179,7 @@ impl<'a> Parser<'a> {
                 spanned_token.right,
             ));
         }
+        self.next_token().unwrap();
         Ok(spanned_token)
     }
     fn parse_integer(&self, s: Spanned<Token>) -> Result<Spanned<Expression>, Spanned<ParseError>> {

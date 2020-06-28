@@ -68,6 +68,9 @@ pub fn clear_stmt_span(stmt: &mut Spanned<Statement>) {
         }
     }
 }
+pub fn parse_program_error(source: &str) -> Vec<Spanned<ParseError>> {
+    Parser::new(source).parse_program().unwrap_err()
+}
 pub fn parse_program(source: &str) -> Vec<Spanned<Statement>> {
     let mut p = Parser::new(source).parse_program().unwrap();
     for s in &mut p {

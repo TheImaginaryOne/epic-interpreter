@@ -30,6 +30,26 @@ mod test {
         );
     }
     #[test]
+    fn error_sync_1() {
+        assert_eq!(
+            parse_program_error("let x = 8 - $; a = 7"),
+            vec![
+                Spanned::new(12, ParseError::LexError(LexError::UnexpectedToken), 13),
+                Spanned::new(20, ParseError::UnexpectedToken(Token::Eof, ";".into()), 20),
+            ],
+        );
+    }
+    #[test]
+    fn error_sync_2() {
+        assert_eq!(
+            parse_program_error("let x = 8 - 9 let y = 7"),
+            vec![
+                Spanned::new(14, ParseError::UnexpectedToken(Token::Let, ";".into()), 17),
+                Spanned::new(23, ParseError::UnexpectedToken(Token::Eof, ";".into()), 23),
+            ],
+        );
+    }
+    #[test]
     fn simple_assignment() {
         assert_eq!(
             parse_dbg("x = 78 - 99"),
