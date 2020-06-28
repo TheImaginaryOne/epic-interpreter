@@ -1,7 +1,9 @@
 use std::iter::Peekable;
 use std::str::FromStr;
 
-use crate::compiler::ast::{binary, unary, BinaryOp, Expression, Literal, Spanned, UnaryOp};
+use crate::compiler::ast::{
+    binary, unary, BinaryOp, Expression, Identifier, Literal, Spanned, Statement, UnaryOp,
+};
 use crate::compiler::error::ParseError;
 use crate::compiler::lexer::{Lexer, Token};
 use crate::compiler::utils::token_to_string;
@@ -55,9 +57,69 @@ impl<'a> Parser<'a> {
             lexer: Lexer::new(source).peekable(),
         }
     }
-    pub fn parse_program(&mut self) -> Result<(), Vec<()>> {
-        Ok(())
+    pub fn parse_program(&mut self) -> Result<Vec<Spanned<Statement>>, Vec<Spanned<ParseError>>> {
+        let mut statements = Vec::new();
+        let mut errors = Vec::new();
+        loop {
+            if let Ok(token_sp) = self.lexer.peek().unwrap() {
+                if token_sp.1 == Token::Eof {
+                    break;
+                }
+            }
+
+            match self.parse_statement() {
+                Ok(s) => statements.push(s),
+                Err(e) => errors.push(e), // todo
+            }
+        }
+        if errors.len() > 0 {
+            Err(errors)
+        } else {
+            Ok(statements)
+        }
     }
+    pub fn parse_statement(&mut self) -> Result<Spanned<Statement>, Spanned<ParseError>> {
+        let token_sp = self.next_token()?;
+
+        let stmt = match token_sp.inner {
+            Token::Let => {
+                let identifier = self.expect_token(Token::Identifier)?;
+                self.expect_token(Token::Equal)?;
+
+                let expr = self.parse_expr()?;
+
+                let (id_left, id_right) = (identifier.left, identifier.right);
+                let expr_right = expr.right;
+                Spanned::new(
+                    id_left,
+                    Statement::LetBinding(
+                        Spanned::new(
+                            id_left,
+                            Identifier {
+                                name: self.source[id_left..id_right].into(),
+                            },
+                            id_right,
+                        ),
+                        expr,
+                    ),
+                    expr_right,
+                )
+            }
+            _ => {
+                return Err(Spanned::new(
+                    token_sp.left,
+                    ParseError::UnexpectedToken(
+                        token_sp.inner,
+                        "`let`, `if`, `{` (block start)".into(),
+                    ),
+                    token_sp.right,
+                ))
+            }
+        };
+        self.expect_token(Token::Semicolon)?;
+        Ok(stmt)
+    }
+
     /// Only use for testing
     pub fn parse_expr(&mut self) -> Result<Spanned<Expression>, Spanned<ParseError>> {
         self.parse_expr_binding_power(0)
@@ -72,7 +134,7 @@ impl<'a> Parser<'a> {
         Ok(Spanned::new(token_sp.0, token_sp.1, token_sp.2))
     }
 
-    fn expect_token(&mut self, t: Token) -> Result<(), Spanned<ParseError>> {
+    fn expect_token(&mut self, t: Token) -> Result<Spanned<Token>, Spanned<ParseError>> {
         let spanned_token = self.next_token()?;
         if spanned_token.inner != t {
             let message = token_to_string(t);
@@ -82,7 +144,7 @@ impl<'a> Parser<'a> {
                 spanned_token.right,
             ));
         }
-        Ok(())
+        Ok(spanned_token)
     }
     fn parse_integer(&self, s: Spanned<Token>) -> Result<Spanned<Expression>, Spanned<ParseError>> {
         i32::from_str(&self.source[s.left..s.right])

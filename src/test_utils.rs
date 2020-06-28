@@ -71,9 +71,7 @@ pub fn clear_stmt_span(stmt: &mut Spanned<Statement>) {
     }
 }
 pub fn parse_program(source: &str) -> Vec<Spanned<Statement>> {
-    let tokens = Lexer::new(source);
-    // TODO swap
-    let mut p = grammar::ProgramParser::new().parse(source, tokens).unwrap();
+    let mut p = Parser::new(source).parse_program().unwrap();
     for s in &mut p {
         clear_stmt_span(s);
     }
