@@ -34,6 +34,7 @@ pub enum Statement {
     // TODO modify later!
     Block(Block),
     IfElse(Box<IfElse>),
+    While(Spanned<Expression>, Box<Spanned<Block>>),
 }
 #[derive(Debug, PartialEq)]
 pub enum Expression {

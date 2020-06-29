@@ -180,6 +180,19 @@ mod test {
         );
     }
     #[test]
+    fn while_simple() {
+        assert_eq!(
+            parse_program("while x < 3 { x = x + 1; }"),
+            vec![while_stmt(
+                bin(expr_id("x"), "<", int(3)),
+                block(vec![expr_stmt(asgn(
+                    id("x"),
+                    bin(expr_id("x"), "+", int(1))
+                ))])
+            )]
+        );
+    }
+    #[test]
     fn if_else_simple() {
         assert_eq!(
             parse_program("if y > 1 { x = 1; } else if y < 1 { x = 2; } else { x = 3; }"),

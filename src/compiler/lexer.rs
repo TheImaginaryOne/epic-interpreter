@@ -24,6 +24,7 @@ pub enum Token {
     Greater,
     Let,
     If,
+    While,
     Else,
 
     Comment,
@@ -112,6 +113,7 @@ impl<'a> Lexer<'a> {
             "let" => Ok(Token::Let),
             "if" => Ok(Token::If),
             "else" => Ok(Token::Else),
+            "while" => Ok(Token::While),
             _ => Ok(Token::Identifier),
         };
     }
@@ -178,7 +180,7 @@ mod test {
     use super::*;
     #[test]
     fn simple() {
-        let r = Lexer::new("let xbi = * if;").collect::<Vec<_>>();
+        let r = Lexer::new("let xbi = * if; while").collect::<Vec<_>>();
         assert_eq!(
             r,
             vec![
@@ -188,7 +190,8 @@ mod test {
                 Ok(Spanned::new(10, Token::Star, 11)),
                 Ok(Spanned::new(12, Token::If, 14)),
                 Ok(Spanned::new(14, Token::Semicolon, 15)),
-                Ok(Spanned::new(15, Token::Eof, 15)),
+                Ok(Spanned::new(16, Token::While, 21)),
+                Ok(Spanned::new(21, Token::Eof, 21)),
             ]
         );
     }

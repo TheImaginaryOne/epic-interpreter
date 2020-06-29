@@ -45,6 +45,14 @@ pub fn clear_stmt_span(stmt: &mut Spanned<Statement>) {
                 clear_stmt_span(stmt);
             }
         }
+        Statement::While(condition, body) => {
+            clear_expr_span(condition);
+            body.left = 0;
+            body.right = 0;
+            for stmt in &mut body.inner.statements {
+                clear_stmt_span(stmt);
+            }
+        }
         Statement::IfElse(i) => {
             let IfElse {
                 then_clauses,
@@ -100,6 +108,9 @@ pub fn expr_stmt(expr: Spanned<Expression>) -> Spanned<Statement> {
 }
 pub fn let_stmt(id: Spanned<Identifier>, expr: Spanned<Expression>) -> Spanned<Statement> {
     dummy_span(Statement::LetBinding(id, expr))
+}
+pub fn while_stmt(c: Spanned<Expression>, b: Spanned<Block>) -> Spanned<Statement> {
+    dummy_span(Statement::While(c, Box::new(b)))
 }
 pub fn if_stmt(t: Vec<(Spanned<Expression>, Spanned<Block>)>) -> Spanned<Statement> {
     dummy_span(Statement::IfElse(Box::new(IfElse {

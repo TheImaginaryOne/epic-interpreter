@@ -74,6 +74,25 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_while(
+        &mut self,
+        errors: &mut Vec<Spanned<ParseError>>,
+    ) -> Result<Spanned<Statement>, Spanned<ParseError>> {
+        let while_sp = self.next_token().unwrap();
+
+        let left = while_sp.left;
+
+        let condition = self.parse_expr()?;
+        let body = self.parse_block(errors)?;
+
+        let right = body.right;
+
+        Ok(Spanned::new(
+            left,
+            Statement::While(condition, Box::new(body)),
+            right,
+        ))
+    }
     fn parse_if(
         &mut self,
         errors: &mut Vec<Spanned<ParseError>>,
@@ -206,6 +225,7 @@ impl<'a> Parser<'a> {
                         block_sp.right,
                     ))
                 }
+                Token::While => self.parse_while(errors),
                 Token::If => self.parse_if(errors),
                 // expression statement
                 _ => self.parse_expr().and_then(|expr| {
