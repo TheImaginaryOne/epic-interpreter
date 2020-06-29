@@ -32,7 +32,7 @@ pub fn infix_op(token: Token) -> Option<BinaryOp> {
     })
 }
 pub fn prefix_binding_power(token: Token) -> Option<u8> {
-    // (left bp, right bp)
+    // right bp
     match token {
         Token::Minus => Some(8),
         _ => None,
@@ -62,12 +62,7 @@ impl<'a> Parser<'a> {
     pub fn parse_program(&mut self) -> Result<Vec<Spanned<Statement>>, Vec<Spanned<ParseError>>> {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
-        loop {
-            if let Ok(token_sp) = self.lexer.peek().unwrap() {
-                if token_sp.inner == Token::Eof {
-                    break;
-                }
-            }
+        while self.peek_token().map_or(true, |t| t.inner != Token::Eof) {
             if let Ok(s) = self.parse_statement(&mut errors) {
                 statements.push(s);
             }
@@ -225,7 +220,6 @@ impl<'a> Parser<'a> {
             Err(e) => {
                 errors.push(e);
                 self.synchronise();
-                // todo error synchronise
                 return Err(());
             }
         }
@@ -254,17 +248,17 @@ impl<'a> Parser<'a> {
 
     /// If the token is the required one, it is consumed, otherwise the function returns an error.
     fn expect_token(&mut self, t: Token) -> Result<Spanned<Token>, Spanned<ParseError>> {
-        let spanned_token = self.peek_token()?;
-        if spanned_token.inner != t {
+        let token_sp = self.peek_token()?;
+        if token_sp.inner != t {
             let message = token_to_string(t);
             return Err(Spanned::new(
-                spanned_token.left,
-                ParseError::UnexpectedToken(spanned_token.inner, message),
-                spanned_token.right,
+                token_sp.left,
+                ParseError::UnexpectedToken(token_sp.inner, message),
+                token_sp.right,
             ));
         }
         self.lexer.next();
-        Ok(spanned_token)
+        Ok(token_sp)
     }
     fn parse_integer(&self, s: Spanned<Token>) -> Result<Spanned<Expression>, Spanned<ParseError>> {
         i32::from_str(&self.source[s.left..s.right])
