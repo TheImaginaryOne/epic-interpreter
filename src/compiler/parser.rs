@@ -151,7 +151,7 @@ impl<'a> Parser<'a> {
         ))
     }
     fn parse_let(&mut self) -> Result<Spanned<Statement>, Spanned<ParseError>> {
-        self.lexer.next();
+        let let_sp = self.next_token().unwrap();
 
         let identifier = self.expect_token(Token::Identifier)?;
         self.expect_token(Token::Equal)?;
@@ -162,7 +162,7 @@ impl<'a> Parser<'a> {
         let expr_right = expr.right;
         self.expect_token(Token::Semicolon)?;
         Ok(Spanned::new(
-            id_left,
+            let_sp.left,
             Statement::LetBinding(
                 Spanned::new(
                     id_left,
