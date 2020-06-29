@@ -24,7 +24,7 @@ pub fn token_to_string(token: Token) -> String {
         Token::If => "if",
         Token::Else => "else",
         Token::Eof => "end of file",
-        _ => " "
+        _ => " ",
     }
     .to_string()
 }

@@ -78,7 +78,8 @@ impl<'a> Parser<'a> {
         }
     }
     fn parse_let(&mut self) -> Result<Spanned<Statement>, Spanned<ParseError>> {
-        self.next_token()?;
+        self.lexer.next();
+        
         let identifier = self.expect_token(Token::Identifier)?;
         self.expect_token(Token::Equal)?;
 
@@ -111,14 +112,13 @@ impl<'a> Parser<'a> {
                 match token_sp {
                     Token::Eof | Token::Let/* | Token::If */ => break,
                     Token::Semicolon => {
-                        self.next_token().unwrap();
+                        self.lexer.next();
                         break;
                     }
-                    _ => {
-                        self.next_token().unwrap();
-                    }
+                    _ => (),
                 }
             }
+            self.lexer.next();
         }
     }
     pub fn parse_statement(
@@ -179,7 +179,7 @@ impl<'a> Parser<'a> {
                 spanned_token.right,
             ));
         }
-        self.next_token().unwrap();
+        self.lexer.next();
         Ok(spanned_token)
     }
     fn parse_integer(&self, s: Spanned<Token>) -> Result<Spanned<Expression>, Spanned<ParseError>> {
@@ -217,17 +217,27 @@ impl<'a> Parser<'a> {
         &mut self,
         min_bp: u8,
     ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
-        let unary_token_sp = self.next_token()?;
+        // we should not advance the lexer if there is
+        // actually an error
+        let unary_token_sp = self.peek_token()?;
 
         let mut left_expr_sp = match unary_token_sp.inner {
-            Token::Integer => self.parse_integer(unary_token_sp)?,
-            Token::Minus => self.parse_unary(unary_token_sp)?,
+            Token::Integer => {
+                self.lexer.next();
+                self.parse_integer(unary_token_sp)?
+            }
+            Token::Minus => {
+                self.lexer.next();
+                self.parse_unary(unary_token_sp)?
+            }
             Token::LParen => {
+                self.lexer.next();
                 let expr = self.parse_expr_binding_power(0)?;
                 self.expect_token(Token::RParen)?;
                 expr
             }
             Token::String => {
+                self.lexer.next();
                 let (id_left, id_right) = (unary_token_sp.left, unary_token_sp.right);
                 // TODO escape the string
                 Spanned::new(
@@ -239,6 +249,7 @@ impl<'a> Parser<'a> {
                 )
             }
             Token::Identifier => {
+                self.lexer.next();
                 let (id_left, id_right) = (unary_token_sp.left, unary_token_sp.right);
                 Spanned::new(
                     id_left,
