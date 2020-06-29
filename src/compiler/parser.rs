@@ -2,7 +2,8 @@ use std::iter::Peekable;
 use std::str::FromStr;
 
 use crate::compiler::ast::{
-    assign, binary, unary, BinaryOp, Expression, Identifier, Literal, Spanned, Statement, UnaryOp,
+    assign, binary, unary, BinaryOp, Block, Expression, Identifier, IfElse, Literal, Spanned,
+    Statement, UnaryOp,
 };
 use crate::compiler::error::ParseError;
 use crate::compiler::lexer::{Lexer, Token};
@@ -77,9 +78,81 @@ impl<'a> Parser<'a> {
             Ok(statements)
         }
     }
+
+    fn parse_if(
+        &mut self,
+        errors: &mut Vec<Spanned<ParseError>>,
+    ) -> Result<Spanned<Statement>, Spanned<ParseError>> {
+        // Consume the if
+        let if_sp = self.next_token().unwrap();
+
+        let left = if_sp.left;
+
+        let mut then_clauses = Vec::new();
+        let condition = self.parse_expr()?;
+        let then_block = self.parse_block(errors)?;
+
+        let mut right = then_block.right;
+        let mut else_clause = None;
+        then_clauses.push((condition, then_block));
+
+        if self.peek_token().map_or(false, |t| t.inner == Token::Else) {
+            self.lexer.next();
+            loop {
+                // there may be other "else if" blocks
+                if self.peek_token().map_or(false, |t| t.inner == Token::If) {
+                    self.lexer.next();
+
+                    let condition = self.parse_expr()?;
+                    let then = self.parse_block(errors)?;
+                    then_clauses.push((condition, then));
+                    self.expect_token(Token::Else)?;
+                } else {
+                    // else block
+                    let block = self.parse_block(errors)?;
+                    right = block.right;
+                    else_clause = Some(block);
+                    break;
+                }
+            }
+        }
+        Ok(Spanned::new(
+            left,
+            Statement::IfElse(Box::new(IfElse {
+                then_clauses,
+                else_clause,
+            })),
+            right,
+        ))
+    }
+
+    fn parse_block(
+        &mut self,
+        errors: &mut Vec<Spanned<ParseError>>,
+    ) -> Result<Spanned<Block>, Spanned<ParseError>> {
+        // this should be a LBrace
+        let lbrace_sp = self.next_token().unwrap();
+        let mut statements = Vec::new();
+
+        while self
+            .peek_token()
+            .map(|t| t.inner)
+            .map_or(true, |t| t != Token::Eof && t != Token::RBrace)
+        {
+            if let Ok(s) = self.parse_statement(errors) {
+                statements.push(s);
+            }
+        }
+        let rbrace_sp = self.expect_token(Token::RBrace)?;
+        Ok(Spanned::new(
+            lbrace_sp.left,
+            Block { statements },
+            rbrace_sp.right,
+        ))
+    }
     fn parse_let(&mut self) -> Result<Spanned<Statement>, Spanned<ParseError>> {
         self.lexer.next();
-        
+
         let identifier = self.expect_token(Token::Identifier)?;
         self.expect_token(Token::Equal)?;
 
@@ -110,7 +183,9 @@ impl<'a> Parser<'a> {
             let token_result = self.peek_token().map(|t| t.inner);
             if let Ok(token_sp) = token_result {
                 match token_sp {
-                    Token::Eof | Token::Let/* | Token::If */ => break,
+                    Token::Eof | Token::Let | Token::LBrace | Token::Identifier | Token::If => {
+                        break
+                    }
                     Token::Semicolon => {
                         self.lexer.next();
                         break;
@@ -128,6 +203,15 @@ impl<'a> Parser<'a> {
         let stmt = self.peek_token().and_then(|t| {
             match t.inner {
                 Token::Let => self.parse_let(),
+                Token::LBrace => {
+                    let block_sp = self.parse_block(errors)?;
+                    Ok(Spanned::new(
+                        block_sp.left,
+                        Statement::Block(block_sp.inner),
+                        block_sp.right,
+                    ))
+                }
+                Token::If => self.parse_if(errors),
                 // expression statement
                 _ => self.parse_expr().and_then(|expr| {
                     let r = expr.right;

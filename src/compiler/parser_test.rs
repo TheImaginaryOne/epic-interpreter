@@ -50,6 +50,31 @@ mod test {
         );
     }
     #[test]
+    fn error_sync_block() {
+        assert_eq!(
+            parse_program_error("let x = 8 + (5 { let y = \"hi\""),
+            vec![
+                Spanned::new(
+                    15,
+                    ParseError::UnexpectedToken(Token::LBrace, ")".into()),
+                    16
+                ),
+                Spanned::new(29, ParseError::UnexpectedToken(Token::Eof, ";".into()), 29),
+                Spanned::new(29, ParseError::UnexpectedToken(Token::Eof, "}".into()), 29),
+            ],
+        );
+    }
+    #[test]
+    fn error_sync_if_else() {
+        assert_eq!(
+            parse_program_error("let y = (8 if x = 9 { let y = \"hi\";"),
+            vec![
+                Spanned::new(11, ParseError::UnexpectedToken(Token::If, ")".into()), 13),
+                Spanned::new(35, ParseError::UnexpectedToken(Token::Eof, "}".into()), 35),
+            ],
+        );
+    }
+    #[test]
     fn simple_assignment() {
         assert_eq!(
             parse_dbg("x = 78 - 99"),
