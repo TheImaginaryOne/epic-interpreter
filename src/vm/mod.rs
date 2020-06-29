@@ -37,6 +37,7 @@ pub enum RuntimeError {
     CannotFindObject,
     JumpOutOfRange,
 }
+#[derive(Debug)]
 pub struct Vm {
     heap: Heap,
     chunk: Chunk,

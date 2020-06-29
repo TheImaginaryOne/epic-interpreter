@@ -5,7 +5,7 @@ use crate::vm::chunk::{Chunk, Instruction, Value};
 use crate::vm::heap::{Heap, Object};
 
 #[derive(Debug)]
-struct CodeGenError {
+pub struct CodeGenError {
     // add error info later TODO
     pub ty: CodeGenErrorType,
 }
@@ -15,7 +15,7 @@ impl CodeGenError {
     }
 }
 #[derive(Debug, PartialEq)]
-enum CodeGenErrorType {
+pub enum CodeGenErrorType {
     UndefinedVariable,
     VariableExists,
 }
@@ -24,7 +24,7 @@ struct Local {
     name: String,
     scope: u8,
 }
-struct CodeGen {
+pub struct CodeGen {
     // TODO for now there must be <= 256 locals
     locals: Vec<Local>,
     current_scope: u8,

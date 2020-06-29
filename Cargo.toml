@@ -11,8 +11,10 @@ build = "build.rs" # LALRPOP preprocessing
 lalrpop-util = "0.19"
 regex = "1"
 thiserror = "1.0"
+anyhow = "1.0"
 num-traits = "0.2"
 enum-primitive-derive = "0.2"
+codespan-reporting = "0.9"
 
 # Add a build-time dependency on the lalrpop library:
 [build-dependencies]
