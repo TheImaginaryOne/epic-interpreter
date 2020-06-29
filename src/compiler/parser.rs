@@ -2,8 +2,8 @@ use std::iter::Peekable;
 use std::str::FromStr;
 
 use crate::compiler::ast::{
-    assign, binary, unary, BinaryOp, Block, Expression, Identifier, IfElse, Literal, Spanned,
-    Statement, UnaryOp,
+    assign, binary, unary, BinaryOp, Block, Expression, Identifier, Literal, Spanned, Statement,
+    UnaryOp,
 };
 use crate::compiler::error::ParseError;
 use crate::compiler::lexer::{Lexer, Token};
@@ -108,7 +108,7 @@ impl<'a> Parser<'a> {
 
         let mut right = then_block.right;
         let mut else_clause = None;
-        then_clauses.push((condition, then_block));
+        then_clauses.push((condition, Box::new(then_block)));
 
         if self.peek_token().map_or(false, |t| t.inner == Token::Else) {
             self.lexer.next();
@@ -119,23 +119,20 @@ impl<'a> Parser<'a> {
 
                     let condition = self.parse_expr()?;
                     let then = self.parse_block(errors)?;
-                    then_clauses.push((condition, then));
+                    then_clauses.push((condition, Box::new(then)));
                     self.expect_token(Token::Else)?;
                 } else {
                     // else block
                     let block = self.parse_block(errors)?;
                     right = block.right;
-                    else_clause = Some(block);
+                    else_clause = Some(Box::new(block));
                     break;
                 }
             }
         }
         Ok(Spanned::new(
             left,
-            Statement::IfElse(Box::new(IfElse {
-                then_clauses,
-                else_clause,
-            })),
+            Statement::IfElse(then_clauses, else_clause),
             right,
         ))
     }
@@ -160,7 +157,7 @@ impl<'a> Parser<'a> {
         let rbrace_sp = self.expect_token(Token::RBrace)?;
         Ok(Spanned::new(
             lbrace_sp.left,
-            Block { statements },
+            Block(statements),
             rbrace_sp.right,
         ))
     }

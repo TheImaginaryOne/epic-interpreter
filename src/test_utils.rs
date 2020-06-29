@@ -41,7 +41,7 @@ pub fn clear_stmt_span(stmt: &mut Spanned<Statement>) {
             clear_expr_span(e);
         }
         Statement::Block(block) => {
-            for stmt in &mut block.statements {
+            for stmt in &mut block.0 {
                 clear_stmt_span(stmt);
             }
         }
@@ -49,27 +49,23 @@ pub fn clear_stmt_span(stmt: &mut Spanned<Statement>) {
             clear_expr_span(condition);
             body.left = 0;
             body.right = 0;
-            for stmt in &mut body.inner.statements {
+            for stmt in &mut body.inner.0 {
                 clear_stmt_span(stmt);
             }
         }
-        Statement::IfElse(i) => {
-            let IfElse {
-                then_clauses,
-                else_clause,
-            } = i.as_mut();
+        Statement::IfElse(then_clauses, else_clause) => {
             for (cond, block) in then_clauses {
                 clear_expr_span(cond);
                 block.left = 0;
                 block.right = 0;
-                for stmt in &mut block.inner.statements {
+                for stmt in &mut block.inner.0 {
                     clear_stmt_span(stmt);
                 }
             }
             if let Some(b) = else_clause {
                 b.left = 0;
                 b.right = 0;
-                for stmt in &mut b.inner.statements {
+                for stmt in &mut b.inner.0 {
                     clear_stmt_span(stmt);
                 }
             }
@@ -113,19 +109,19 @@ pub fn while_stmt(c: Spanned<Expression>, b: Spanned<Block>) -> Spanned<Statemen
     dummy_span(Statement::While(c, Box::new(b)))
 }
 pub fn if_stmt(t: Vec<(Spanned<Expression>, Spanned<Block>)>) -> Spanned<Statement> {
-    dummy_span(Statement::IfElse(Box::new(IfElse {
-        then_clauses: t,
-        else_clause: None,
-    })))
+    dummy_span(Statement::IfElse(
+        t.into_iter().map(|(e, b)| (e, Box::new(b))).collect(),
+        None,
+    ))
 }
 pub fn if_else_stmt(
     t: Vec<(Spanned<Expression>, Spanned<Block>)>,
     e: Spanned<Block>,
 ) -> Spanned<Statement> {
-    dummy_span(Statement::IfElse(Box::new(IfElse {
-        then_clauses: t,
-        else_clause: Some(e),
-    })))
+    dummy_span(Statement::IfElse(
+        t.into_iter().map(|(e, b)| (e, Box::new(b))).collect(),
+        Some(Box::new(e)),
+    ))
 }
 
 pub fn un(op_str: &str, e1: Spanned<Expression>) -> Spanned<Expression> {
@@ -176,10 +172,10 @@ pub fn expr_id(s: &str) -> Spanned<Expression> {
     dummy_span(Expression::Identifier(Identifier { name: s.into() }))
 }
 pub fn block_stmt(statements: Vec<Spanned<Statement>>) -> Spanned<Statement> {
-    dummy_span(Statement::Block(Block { statements }))
+    dummy_span(Statement::Block(Block(statements)))
 }
 pub fn block(statements: Vec<Spanned<Statement>>) -> Spanned<Block> {
-    dummy_span(Block { statements })
+    dummy_span(Block(statements))
 }
 
 // chunk utility

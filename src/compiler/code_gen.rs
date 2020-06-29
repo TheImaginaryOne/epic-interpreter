@@ -1,6 +1,4 @@
-use super::ast::{
-    BinaryOp, Block, Expression, Identifier, IfElse, Literal, Spanned, Statement, UnaryOp,
-};
+use super::ast::{BinaryOp, Block, Expression, Identifier, Literal, Spanned, Statement, UnaryOp};
 use crate::vm::chunk::{Chunk, Instruction, Value};
 use crate::vm::heap::{Heap, Object};
 
@@ -84,12 +82,7 @@ impl CodeGen {
                 }
                 self.current_scope -= 1;
             }
-            Statement::IfElse(if_else) => {
-                let IfElse {
-                    then_clauses,
-                    else_clause,
-                } = if_else.as_ref();
-
+            Statement::IfElse(then_clauses, else_clause) => {
                 let mut previous_jump_loc = 0;
                 // the final instruction of each "if ... { ... }" block
                 let mut block_ends = vec![];
@@ -151,7 +144,7 @@ impl CodeGen {
         heap: &mut Heap,
         block: &Block,
     ) -> Result<(), CodeGenError> {
-        for statement in &block.statements {
+        for statement in &block.0 {
             self.gen_statement(chunk, heap, &statement)?;
         }
         Ok(())
