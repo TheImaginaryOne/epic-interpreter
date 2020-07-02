@@ -20,7 +20,7 @@ impl ObjFunction {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Heap {
     objects: Vec<Object>,
 }

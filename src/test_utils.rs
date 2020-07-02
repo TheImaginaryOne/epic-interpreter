@@ -6,6 +6,13 @@ use crate::compiler::parser::Parser;
 use crate::vm::chunk::*;
 use crate::vm::heap::ObjFunction;
 
+pub fn clear_block_span(b: &mut Spanned<Block>) {
+    b.left = 0;
+    b.right = 0;
+    for stmt in &mut b.inner.0 {
+        clear_stmt_span(stmt);
+    }
+}
 pub fn clear_expr_span(e: &mut Spanned<Expression>) {
     e.left = 0;
     e.right = 0;
@@ -47,29 +54,26 @@ pub fn clear_stmt_span(stmt: &mut Spanned<Statement>) {
                 clear_stmt_span(stmt);
             }
         }
+        Statement::Function {
+            body, arguments, ..
+        } => {
+            for arg in arguments {
+                arg.left = 0;
+                arg.right = 0;
+            }
+            clear_block_span(body);
+        }
         Statement::While(condition, body) => {
             clear_expr_span(condition);
-            body.left = 0;
-            body.right = 0;
-            for stmt in &mut body.inner.0 {
-                clear_stmt_span(stmt);
-            }
+            clear_block_span(body);
         }
         Statement::IfElse(then_clauses, else_clause) => {
             for (cond, block) in then_clauses {
                 clear_expr_span(cond);
-                block.left = 0;
-                block.right = 0;
-                for stmt in &mut block.inner.0 {
-                    clear_stmt_span(stmt);
-                }
+                clear_block_span(block);
             }
-            if let Some(b) = else_clause {
-                b.left = 0;
-                b.right = 0;
-                for stmt in &mut b.inner.0 {
-                    clear_stmt_span(stmt);
-                }
+            if let Some(block) = else_clause {
+                clear_block_span(block);
             }
         }
     }
@@ -124,6 +128,19 @@ pub fn if_else_stmt(
         t.into_iter().map(|(e, b)| (e, Box::new(b))).collect(),
         Some(Box::new(e)),
     ))
+}
+pub fn call_func(n: &str, args: Vec<Spanned<Expression>>) -> Spanned<Expression> {
+    dummy_span(Expression::CallFunction(
+        id(n),
+        args.into_iter().map(|x| Box::new(x)).collect(),
+    ))
+}
+pub fn func_stmt(n: &str, args: Vec<&str>, b: Spanned<Block>) -> Spanned<Statement> {
+    dummy_span(Statement::Function {
+        name: id(n),
+        arguments: args.iter().map(|i| id(i)).collect(),
+        body: Box::new(b),
+    })
 }
 
 pub fn un(op_str: &str, e1: Spanned<Expression>) -> Spanned<Expression> {

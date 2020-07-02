@@ -30,12 +30,18 @@ pub enum Statement {
         Option<Box<Spanned<Block>>>,
     ),
     While(Spanned<Expression>, Box<Spanned<Block>>),
+    Function {
+        name: Spanned<Identifier>,
+        arguments: Vec<Spanned<Identifier>>,
+        body: Box<Spanned<Block>>,
+    },
 }
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     // TODO THIS MIGHT CHANGE LATER
     Identifier(Identifier),
     Assign(Spanned<Identifier>, Box<Spanned<Expression>>),
+    CallFunction(Spanned<Identifier>, Vec<Box<Spanned<Expression>>>),
     Binary(
         Box<Spanned<Expression>>,
         Spanned<BinaryOp>,
