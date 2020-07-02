@@ -118,6 +118,31 @@ mod test {
         );
     }
     #[test]
+    fn function_decl() {
+        assert_eq!(
+            parse_program("fun bob(hi, bye) { let x = hi == bye; }"),
+            vec![func_stmt(
+                "bob",
+                vec!["hi", "bye"],
+                block(vec![let_stmt(
+                    id("x"),
+                    bin(expr_id("hi"), "==", expr_id("bye"))
+                )]),
+            )]
+        );
+    }
+    #[test]
+    fn function_call() {
+        assert_eq!(
+            parse_dbg("5 + bob(8*6, hi);"),
+            bin(
+                int(5),
+                "+",
+                call_func("bob", vec![bin(int(8), "*", int(6)), expr_id("hi")])
+            )
+        );
+    }
+    #[test]
     fn left_assoc_1() {
         assert_eq!(
             parse_dbg("20 - 33 - 2 + 100"),
@@ -177,6 +202,19 @@ mod test {
                 let_stmt(id("xy"), bin(int(1), "*", int(2))),
                 expr_stmt(asgn(id("xy"), bin(expr_id("xy"), "-", int(11))))
             ]
+        );
+    }
+    #[test]
+    fn while_simple() {
+        assert_eq!(
+            parse_program("while x < 3 { x = x + 1; }"),
+            vec![while_stmt(
+                bin(expr_id("x"), "<", int(3)),
+                block(vec![expr_stmt(asgn(
+                    id("x"),
+                    bin(expr_id("x"), "+", int(1))
+                ))])
+            )]
         );
     }
     #[test]

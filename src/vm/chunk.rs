@@ -9,6 +9,15 @@ pub enum Value {
     Bool(bool),
     Object(Handle),
 }
+impl Value {
+    pub fn as_object_handle(&self) -> Option<Handle> {
+        if let Self::Object(h) = self {
+            Some(*h)
+        } else {
+            None
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
@@ -27,8 +36,9 @@ pub enum Instruction {
     Equal,
     Less,
     Greater,
+    Call(u8),
 }
-#[derive(Primitive)]
+#[derive(Primitive, Debug)]
 pub enum Opcode {
     Return = 0,
     LoadConstant = 1,
@@ -45,6 +55,7 @@ pub enum Opcode {
     Equal = 12,
     Less = 13,
     Greater = 14,
+    Call = 15,
 }
 #[derive(PartialEq)]
 pub struct Chunk {
@@ -128,6 +139,11 @@ impl Chunk {
             Instruction::Greater => self.write_op(Opcode::Greater),
             Instruction::Less => self.write_op(Opcode::Less),
             Instruction::Equal => self.write_op(Opcode::Equal),
+            Instruction::Call(b) => {
+                let offset = self.write_op(Opcode::Call);
+                self.write_byte(b);
+                offset
+            }
         }
     }
 }
@@ -172,6 +188,7 @@ impl std::fmt::Debug for Chunk {
                 Opcode::Less => (Instruction::Less, 1),
                 Opcode::Equal => (Instruction::Equal, 1),
                 Opcode::Return => (Instruction::Return, 1),
+                Opcode::Call => (Instruction::Call(self.read_byte(start).unwrap_or(0)), 2),
             };
             write!(f, "{}: {:?}, ", pc, instr)?;
             pc += offset;
@@ -202,6 +219,7 @@ mod test {
             (19, Instruction::Equal),
             (20, Instruction::Subtract),
             (21, Instruction::Negate),
+            (22, Instruction::Call(4)),
         ];
         for (offset, i) in instrs {
             assert_eq!(offset, c.write_instr(i.clone()));

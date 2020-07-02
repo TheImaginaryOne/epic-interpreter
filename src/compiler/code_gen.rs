@@ -1,8 +1,6 @@
-use super::ast::{
-    BinaryOp, Block, Expression, Identifier, IfElse, Literal, Spanned, Statement, UnaryOp,
-};
+use super::ast::{BinaryOp, Block, Expression, Identifier, Literal, Spanned, Statement, UnaryOp};
 use crate::vm::chunk::{Chunk, Instruction, Value};
-use crate::vm::heap::{Heap, Object};
+use crate::vm::heap::{Heap, ObjFunction, Object};
 
 #[derive(Debug)]
 pub struct CodeGenError {
@@ -18,6 +16,7 @@ impl CodeGenError {
 pub enum CodeGenErrorType {
     UndefinedVariable,
     VariableExists,
+    TooManyArguments,
 }
 #[derive(Debug)]
 struct Local {
@@ -28,6 +27,7 @@ pub struct CodeGen {
     // TODO for now there must be <= 256 locals
     locals: Vec<Local>,
     current_scope: u8,
+    //current_function: ObjFunction,
 }
 #[allow(dead_code)]
 impl CodeGen {
@@ -35,19 +35,31 @@ impl CodeGen {
         Self {
             locals: Vec::new(),
             current_scope: 0,
+            //current_function: ObjFunction::new("bob".into(), 0),
         }
     }
     pub fn generate(
         &mut self,
         statements: &Vec<Spanned<Statement>>,
-    ) -> Result<(Chunk, Heap), CodeGenError> {
-        let mut chunk = Chunk::new();
+    ) -> Result<(ObjFunction, Heap), CodeGenError> {
         let mut heap = Heap::new(); // TODO this might be changed later, editing a Heap directly is a bit strange
+        Ok((
+            ObjFunction::new("".into(), 0, self.gen_chunk(statements, &mut heap)?),
+            heap,
+        ))
+    }
+    /// generate one chunk for a function
+    fn gen_chunk(
+        &mut self,
+        statements: &Vec<Spanned<Statement>>,
+        heap: &mut Heap,
+    ) -> Result<Chunk, CodeGenError> {
+        let mut chunk = Chunk::new();
         for statement in statements {
-            self.gen_statement(&mut chunk, &mut heap, statement)?;
+            self.gen_statement(&mut chunk, heap, statement)?;
         }
         chunk.write_instr(Instruction::Return);
-        Ok((chunk, heap))
+        Ok(chunk)
     }
     fn gen_statement(
         &mut self,
@@ -59,16 +71,10 @@ impl CodeGen {
             Statement::LetBinding(ident, expr) => {
                 self.gen_expression(chunk, heap, &expr)?;
 
-                let name = &ident.inner.name;
-                if let Some(_) = self.resolve_local(&ident.inner) {
+                if let Ok(_) = self.resolve_local(&ident.inner) {
                     return Err(CodeGenError::new(CodeGenErrorType::VariableExists));
                 }
-                let new_local = Local {
-                    name: name.clone(),
-                    scope: self.current_scope,
-                };
-
-                self.locals.push(new_local);
+                self.add_local(&ident.inner);
             }
             Statement::Expression(expr) => self.gen_expression(chunk, heap, &expr)?,
             Statement::Block(block) => {
@@ -84,12 +90,7 @@ impl CodeGen {
                 }
                 self.current_scope -= 1;
             }
-            Statement::IfElse(if_else) => {
-                let IfElse {
-                    then_clauses,
-                    else_clause,
-                } = if_else.as_ref();
-
+            Statement::IfElse(then_clauses, else_clause) => {
                 let mut previous_jump_loc = 0;
                 // the final instruction of each "if ... { ... }" block
                 let mut block_ends = vec![];
@@ -128,6 +129,35 @@ impl CodeGen {
                     self.patch_jump(chunk, end, final_loc);
                 }
             }
+            // function declaration
+            Statement::Function {
+                name,
+                arguments,
+                body,
+            } => {
+                if arguments.len() > 256 {
+                    return Err(CodeGenError::new(CodeGenErrorType::TooManyArguments));
+                }
+                // generate function as an inner chunk
+                let mut inner_code_gen = CodeGen::new();
+                // refer to own value to add support for recursion!
+                inner_code_gen.add_local(&name.inner);
+                for arg in arguments {
+                    // add locals as arguments
+                    inner_code_gen.add_local(&arg.inner);
+                }
+
+                let inner_chunk = inner_code_gen.gen_chunk(&body.inner.0, heap)?;
+                // functions are first class objects! add them to the stack
+                let handle = heap.push(Object::Function(ObjFunction {
+                    arity: arguments.len() as u8,
+                    name: name.inner.name.clone(),
+                    chunk: inner_chunk,
+                }));
+                let i = chunk.write_constant(Value::Object(handle));
+                chunk.write_instr(Instruction::LoadConstant(i as u8 /* TODO */));
+                self.add_local(&name.inner);
+            }
             _ => todo!(),
         }
         Ok(())
@@ -137,13 +167,19 @@ impl CodeGen {
         let offset = target as i32 - location as i32 - 3; // TODO?!
         chunk.write_i16_at(offset as i16, location + 1);
     }
-    fn resolve_local(&self, id: &Identifier) -> Option<u8> {
+    fn add_local(&mut self, name: &Identifier) {
+        self.locals.push(Local {
+            name: name.name.clone(),
+            scope: self.current_scope,
+        });
+    }
+    fn resolve_local(&self, id: &Identifier) -> Result<u8, CodeGenError> {
         for (i, local) in self.locals.iter().rev().enumerate() {
             if id.name == local.name {
-                return Some(self.locals.len() as u8 - 1 - i as u8);
+                return Ok(self.locals.len() as u8 - 1 - i as u8);
             }
         }
-        None
+        Err(CodeGenError::new(CodeGenErrorType::UndefinedVariable))
     }
     fn gen_block(
         &mut self,
@@ -151,7 +187,7 @@ impl CodeGen {
         heap: &mut Heap,
         block: &Block,
     ) -> Result<(), CodeGenError> {
-        for statement in &block.statements {
+        for statement in &block.0 {
             self.gen_statement(chunk, heap, &statement)?;
         }
         Ok(())
@@ -193,15 +229,11 @@ impl CodeGen {
             }
             Expression::Assign(id, e1) => {
                 self.gen_expression(chunk, heap, e1)?;
-                let index = self
-                    .resolve_local(&id.inner)
-                    .ok_or_else(|| CodeGenError::new(CodeGenErrorType::UndefinedVariable))?;
+                let index = self.resolve_local(&id.inner)?;
                 chunk.write_instr(Instruction::WriteLocal(index));
             }
             Expression::Identifier(id) => {
-                let index = self
-                    .resolve_local(&id)
-                    .ok_or_else(|| CodeGenError::new(CodeGenErrorType::UndefinedVariable))?;
+                let index = self.resolve_local(&id)?;
                 chunk.write_instr(Instruction::ReadLocal(index));
             }
             Expression::Unary(op, e1) => {
@@ -210,7 +242,20 @@ impl CodeGen {
                     UnaryOp::Negate => chunk.write_instr(Instruction::Negate),
                 };
             }
-            _ => todo!(),
+            Expression::CallFunction(name, arguments) => {
+                // TODO allow later declaration of functions
+                let func_index = self.resolve_local(&name.inner)?;
+                // Load the function into the stack as a reference to the ObjFunction
+                chunk.write_instr(Instruction::LoadConstant(func_index));
+                for arg in arguments {
+                    // compile arguments
+                    self.gen_expression(chunk, heap, arg)?;
+                }
+                if arguments.len() > 256 {
+                    return Err(CodeGenError::new(CodeGenErrorType::TooManyArguments));
+                }
+                chunk.write_instr(Instruction::Call(arguments.len() as u8));
+            }
         }
         Ok(())
     }
@@ -251,7 +296,7 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode.unwrap().0, c);
+        assert_eq!(bytecode.unwrap().0.chunk, c);
     }
     #[test]
     fn prog_simple() {
@@ -275,7 +320,7 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode.unwrap().0, c);
+        assert_eq!(bytecode.unwrap().0.chunk, c);
     }
     #[test]
     fn unary_simple() {
@@ -291,7 +336,7 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode.unwrap().0, c);
+        assert_eq!(bytecode.unwrap().0.chunk, c);
     }
     #[test]
     fn undefined_variable() {
@@ -350,7 +395,55 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode, c);
+        assert_eq!(bytecode.chunk, c);
+    }
+    #[test]
+    fn function_call() {
+        let f = main_func_any_val(
+            vec![
+                Value::Object(0), // the function
+                Value::Integer(5),
+                Value::Integer(15),
+                Value::Integer(13),
+            ],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(2),
+                Instruction::LoadConstant(3),
+                Instruction::Call(2),
+                Instruction::Multiply,
+                Instruction::Return,
+            ],
+        );
+        let a = function(
+            "sub",
+            2,
+            vec![],
+            vec![
+                Instruction::ReadLocal(2),
+                Instruction::ReadLocal(1),
+                Instruction::Subtract,
+                Instruction::Return,
+            ],
+        );
+        let mut h = Heap::new();
+        h.push(Object::Function(a));
+
+        let ast = vec![
+            func_stmt(
+                "sub",
+                vec!["a", "b"],
+                block(vec![expr_stmt(bin(expr_id("a"), "-", expr_id("b")))]),
+            ),
+            let_stmt(
+                id("aa"),
+                bin(call_func("sub", vec![int(15), int(13)]), "*", int(5)),
+            ),
+        ];
+
+        assert_eq!((f, h), CodeGen::new().generate(&ast).unwrap());
     }
     #[test]
     fn string_literal() {
@@ -371,7 +464,7 @@ mod test {
         }
         c.values = vec![Value::Object(0), Value::Object(1)];
 
-        assert_eq!(bytecode.0, c);
+        assert_eq!(bytecode.0.chunk, c);
         assert_eq!(bytecode.1.get(0).unwrap(), &Object::String("oof".into()));
         assert_eq!(bytecode.1.get(1).unwrap(), &Object::String("ooo".into()));
     }
@@ -405,7 +498,7 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode.0, c);
+        assert_eq!(bytecode.0.chunk, c);
     }
     #[test]
     fn if_else_short() {
@@ -441,7 +534,7 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode.0, c);
+        assert_eq!(bytecode.0.chunk, c);
     }
     #[test]
     fn if_else_long() {
@@ -492,6 +585,6 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode.0, c);
+        assert_eq!(bytecode.0.chunk, c);
     }
 }

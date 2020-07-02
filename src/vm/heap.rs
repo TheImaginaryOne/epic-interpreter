@@ -1,11 +1,26 @@
+use crate::vm::chunk::Chunk;
+
 pub type Handle = usize;
 
 #[derive(PartialEq, Debug)]
 pub enum Object {
     String(String),
+    Function(ObjFunction),
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
+pub struct ObjFunction {
+    pub arity: u8,
+    pub chunk: Chunk,
+    pub name: String, // is this useful??
+}
+impl ObjFunction {
+    pub fn new(name: String, arity: u8, chunk: Chunk) -> Self {
+        Self { arity, chunk, name }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct Heap {
     objects: Vec<Object>,
 }

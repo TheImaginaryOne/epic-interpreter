@@ -10,22 +10,14 @@ impl<T> Spanned<T> {
     }
 }
 
-/// a special block for if/else/else if statements
-#[derive(Debug, PartialEq)]
-pub struct IfElse {
-    pub then_clauses: Vec<(Spanned<Expression>, Spanned<Block>)>,
-    pub else_clause: Option<Spanned<Block>>,
-}
 #[derive(Debug, PartialEq)]
 pub struct Identifier {
     pub name: String,
     // todo
 }
 #[derive(Debug, PartialEq)]
-pub struct Block {
-    pub statements: Vec<Spanned<Statement>>,
-}
-///
+pub struct Block(pub Vec<Spanned<Statement>>);
+
 #[derive(Debug, PartialEq)]
 pub enum Statement {
     // let declaration
@@ -33,13 +25,23 @@ pub enum Statement {
     Expression(Spanned<Expression>),
     // TODO modify later!
     Block(Block),
-    IfElse(Box<IfElse>),
+    IfElse(
+        Vec<(Spanned<Expression>, Box<Spanned<Block>>)>,
+        Option<Box<Spanned<Block>>>,
+    ),
+    While(Spanned<Expression>, Box<Spanned<Block>>),
+    Function {
+        name: Spanned<Identifier>,
+        arguments: Vec<Spanned<Identifier>>,
+        body: Box<Spanned<Block>>,
+    },
 }
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     // TODO THIS MIGHT CHANGE LATER
     Identifier(Identifier),
     Assign(Spanned<Identifier>, Box<Spanned<Expression>>),
+    CallFunction(Spanned<Identifier>, Vec<Box<Spanned<Expression>>>),
     Binary(
         Box<Spanned<Expression>>,
         Spanned<BinaryOp>,
