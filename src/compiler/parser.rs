@@ -2,8 +2,8 @@ use std::iter::Peekable;
 use std::str::FromStr;
 
 use crate::compiler::ast::{
-    assign, binary, unary, BinaryOp, Block, Expression, Identifier, Literal, Spanned, Statement,
-    UnaryOp,
+    assignment, binary, unary, BinaryOp, Block, Expression, Identifier, Literal, Spanned,
+    Statement, UnaryOp,
 };
 use crate::compiler::error::ParseError;
 use crate::compiler::lexer::{Lexer, Token};
@@ -256,7 +256,7 @@ impl<'a> Parser<'a> {
             };
             Ok(Spanned::new(
                 left_expr_sp.left,
-                Expression::CallFunction(
+                Expression::FunctionCall(
                     Spanned::new(left_expr_sp.left, ident, left_expr_sp.right),
                     arguments,
                 ),
@@ -474,7 +474,7 @@ impl<'a> Parser<'a> {
                     // case for expressions like x = 889 + 77
                     if let Expression::Identifier(i) = left_expr_sp.inner {
                         let right = right_expr_sp.right;
-                        left_expr_sp = assign(
+                        left_expr_sp = assignment(
                             left_expr_sp.left,
                             Spanned::new(left_expr_sp.left, i, left_expr_sp.right),
                             right_expr_sp,

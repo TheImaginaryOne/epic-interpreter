@@ -40,8 +40,8 @@ pub enum Statement {
 pub enum Expression {
     // TODO THIS MIGHT CHANGE LATER
     Identifier(Identifier),
-    Assign(Spanned<Identifier>, Box<Spanned<Expression>>),
-    CallFunction(Spanned<Identifier>, Vec<Box<Spanned<Expression>>>),
+    Assignment(Spanned<Identifier>, Box<Spanned<Expression>>),
+    FunctionCall(Spanned<Identifier>, Vec<Box<Spanned<Expression>>>),
     Binary(
         Box<Spanned<Expression>>,
         Spanned<BinaryOp>,
@@ -103,7 +103,7 @@ pub fn literal(left: usize, literal: Literal, right: usize) -> Spanned<Expressio
         inner: Expression::Literal(literal),
     }
 }
-pub fn assign(
+pub fn assignment(
     left: usize,
     identifier: Spanned<Identifier>,
     e2: Spanned<Expression>,
@@ -112,6 +112,6 @@ pub fn assign(
     Spanned {
         left,
         right,
-        inner: Expression::Assign(identifier, Box::new(e2)),
+        inner: Expression::Assignment(identifier, Box::new(e2)),
     }
 }

@@ -227,7 +227,7 @@ impl CodeGen {
                     _ => todo!(),
                 };
             }
-            Expression::Assign(id, e1) => {
+            Expression::Assignment(id, e1) => {
                 self.gen_expression(chunk, heap, e1)?;
                 let index = self.resolve_local(&id.inner)?;
                 chunk.write_instr(Instruction::WriteLocal(index));
@@ -242,7 +242,7 @@ impl CodeGen {
                     UnaryOp::Negate => chunk.write_instr(Instruction::Negate),
                 };
             }
-            Expression::CallFunction(name, arguments) => {
+            Expression::FunctionCall(name, arguments) => {
                 // TODO allow later declaration of functions
                 let func_index = self.resolve_local(&name.inner)?;
                 // Load the function into the stack as a reference to the ObjFunction
