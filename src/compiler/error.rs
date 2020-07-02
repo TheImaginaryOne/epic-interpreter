@@ -23,4 +23,6 @@ pub enum ParseError {
     LexError(#[from] LexError),
     #[error("invalid assignment target")]
     InvalidAssignment,
+    #[error("cannot call function on left expression, expected <identifier>(<a1>, <a2>, ..)")]
+    InvalidFunctionCall,
 }

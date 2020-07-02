@@ -17,6 +17,7 @@ pub enum Token {
     LBrace,
     RBrace,
     Semicolon,
+    Comma,
 
     Equal,
     DoubleEqual, // '=='
@@ -26,6 +27,7 @@ pub enum Token {
     If,
     While,
     Else,
+    Fun,
 
     Comment,
     Whitespace,
@@ -114,6 +116,7 @@ impl<'a> Lexer<'a> {
             "if" => Ok(Token::If),
             "else" => Ok(Token::Else),
             "while" => Ok(Token::While),
+            "fun" => Ok(Token::Fun),
             _ => Ok(Token::Identifier),
         };
     }
@@ -158,6 +161,7 @@ impl<'a> Iterator for Lexer<'a> {
                 '*' => Ok(Token::Star),
                 '/' => self.process_slash(),
                 ';' => Ok(Token::Semicolon),
+                ',' => Ok(Token::Comma),
                 '<' => Ok(Token::Less),
                 '>' => Ok(Token::Greater),
                 '"' => self.process_double_quote(),
@@ -180,7 +184,7 @@ mod test {
     use super::*;
     #[test]
     fn simple() {
-        let r = Lexer::new("let xbi = * if; while").collect::<Vec<_>>();
+        let r = Lexer::new("let xbi = * if; while  fun").collect::<Vec<_>>();
         assert_eq!(
             r,
             vec![
@@ -191,7 +195,8 @@ mod test {
                 Ok(Spanned::new(12, Token::If, 14)),
                 Ok(Spanned::new(14, Token::Semicolon, 15)),
                 Ok(Spanned::new(16, Token::While, 21)),
-                Ok(Spanned::new(21, Token::Eof, 21)),
+                Ok(Spanned::new(23, Token::Fun, 26)),
+                Ok(Spanned::new(26, Token::Eof, 26)),
             ]
         );
     }

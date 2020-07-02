@@ -47,6 +47,8 @@ pub fn infix_binding_power(token: Token) -> Option<(u8, u8)> {
         Token::Less | Token::Greater => Some((4, 5)),
         Token::Plus | Token::Minus => Some((6, 7)),
         Token::Star | Token::Slash => Some((8, 9)),
+        // for functions!
+        Token::LParen => Some((10, 11)),
         _ => None,
     }
 }
@@ -58,6 +60,17 @@ impl<'a> Parser<'a> {
             source,
             lexer: Lexer::new(source).peekable(),
         }
+    }
+    /// Produces an identifier from the token,
+    /// assuming the token is Token::Identifier.
+    fn identifier_from(&self, token_sp: Spanned<Token>) -> Spanned<Identifier> {
+        Spanned::new(
+            token_sp.left,
+            Identifier {
+                name: self.source[token_sp.left..token_sp.right].into(),
+            },
+            token_sp.right,
+        )
     }
     pub fn parse_program(&mut self) -> Result<Vec<Spanned<Statement>>, Vec<Spanned<ParseError>>> {
         let mut statements = Vec::new();
@@ -187,6 +200,76 @@ impl<'a> Parser<'a> {
             expr_right,
         ))
     }
+    fn parse_function(
+        &mut self,
+        errors: &mut Vec<Spanned<ParseError>>,
+    ) -> Result<Spanned<Statement>, Spanned<ParseError>> {
+        let fun_sp = self.next_token().unwrap();
+        let left = fun_sp.left;
+        let mut identifiers = Vec::new();
+
+        let name = self.expect_token(Token::Identifier)?;
+        self.expect_token(Token::LParen)?;
+
+        // parameters
+        loop {
+            let parameter_sp = self.expect_token(Token::Identifier)?;
+            identifiers.push(parameter_sp);
+            if self.peek_token()?.inner == Token::RParen {
+                self.lexer.next();
+                break;
+            }
+            self.expect_token(Token::Comma)?;
+        }
+        dbg!(&self.peek_token());
+        let body = self.parse_block(errors)?;
+
+        let right = body.right;
+
+        Ok(Spanned::new(
+            left,
+            Statement::Function {
+                name: self.identifier_from(name),
+                arguments: identifiers
+                    .into_iter()
+                    .map(|i| self.identifier_from(i))
+                    .collect(),
+                body: Box::new(body),
+            },
+            right,
+        ))
+    }
+    fn parse_fun_call(
+        &mut self,
+        left_expr_sp: Spanned<Expression>,
+    ) -> Result<Spanned<Expression>, Spanned<ParseError>> {
+        if let Expression::Identifier(ident) = left_expr_sp.inner {
+            let mut arguments = Vec::new();
+            // <ident> "(" already consumed
+            let right = loop {
+                let expr_sp = self.parse_expr()?;
+                arguments.push(Box::new(expr_sp));
+                if self.peek_token()?.inner == Token::RParen {
+                    break self.next_token()?.left;
+                }
+                self.expect_token(Token::Comma)?;
+            };
+            Ok(Spanned::new(
+                left_expr_sp.left,
+                Expression::CallFunction(
+                    Spanned::new(left_expr_sp.left, ident, left_expr_sp.right),
+                    arguments,
+                ),
+                right,
+            ))
+        } else {
+            Err(Spanned::new(
+                left_expr_sp.left,
+                ParseError::InvalidFunctionCall,
+                left_expr_sp.right,
+            ))
+        }
+    }
 
     /// Recover if there is an error
     fn synchronise(&mut self) {
@@ -223,6 +306,7 @@ impl<'a> Parser<'a> {
                     ))
                 }
                 Token::While => self.parse_while(errors),
+                Token::Fun => self.parse_function(errors),
                 Token::If => self.parse_if(errors),
                 // expression statement
                 _ => self.parse_expr().and_then(|expr| {
@@ -376,6 +460,11 @@ impl<'a> Parser<'a> {
                 }
                 // consume infix operator
                 self.lexer.next();
+
+                if infix_token_sp.inner == Token::LParen {
+                    left_expr_sp = self.parse_fun_call(left_expr_sp)?;
+                    continue;
+                }
                 // recursively call
                 let right_expr_sp = self.parse_expr_binding_power(right_bp)?;
 

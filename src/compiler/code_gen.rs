@@ -437,7 +437,10 @@ mod test {
                 vec!["a", "b"],
                 block(vec![expr_stmt(bin(expr_id("a"), "-", expr_id("b")))]),
             ),
-            let_stmt(id("aa"), bin(call_func("sub", vec![int(15), int(13)]), "*", int(5))),
+            let_stmt(
+                id("aa"),
+                bin(call_func("sub", vec![int(15), int(13)]), "*", int(5)),
+            ),
         ];
 
         assert_eq!((f, h), CodeGen::new().generate(&ast).unwrap());

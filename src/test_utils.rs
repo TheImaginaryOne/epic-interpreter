@@ -34,6 +34,13 @@ pub fn clear_expr_span(e: &mut Spanned<Expression>) {
             i.right = 0;
             clear_expr_span(e);
         }
+        Expression::CallFunction(n, arguments) => {
+            n.left = 0;
+            n.right = 0;
+            for arg in arguments {
+                clear_expr_span(arg);
+            }
+        }
         _ => (),
     }
 }
@@ -55,8 +62,12 @@ pub fn clear_stmt_span(stmt: &mut Spanned<Statement>) {
             }
         }
         Statement::Function {
-            body, arguments, ..
+            body,
+            arguments,
+            name,
         } => {
+            name.left = 0;
+            name.right = 0;
             for arg in arguments {
                 arg.left = 0;
                 arg.right = 0;
