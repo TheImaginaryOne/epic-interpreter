@@ -1,6 +1,6 @@
 use super::ast::{BinaryOp, Block, Expression, Identifier, Literal, Spanned, Statement, UnaryOp};
 use crate::vm::chunk::{Chunk, Instruction, Value};
-use crate::vm::heap::{Heap, Object};
+use crate::vm::heap::{Heap, ObjFunction, Object};
 
 #[derive(Debug)]
 struct CodeGenError {
@@ -26,6 +26,7 @@ struct CodeGen {
     // TODO for now there must be <= 256 locals
     locals: Vec<Local>,
     current_scope: u8,
+    //current_function: ObjFunction,
 }
 #[allow(dead_code)]
 impl CodeGen {
@@ -33,19 +34,20 @@ impl CodeGen {
         Self {
             locals: Vec::new(),
             current_scope: 0,
+            //current_function: ObjFunction::new("bob".into(), 0),
         }
     }
     pub fn generate(
         &mut self,
         statements: &Vec<Spanned<Statement>>,
-    ) -> Result<(Chunk, Heap), CodeGenError> {
+    ) -> Result<(ObjFunction, Heap), CodeGenError> {
         let mut chunk = Chunk::new();
         let mut heap = Heap::new(); // TODO this might be changed later, editing a Heap directly is a bit strange
         for statement in statements {
             self.gen_statement(&mut chunk, &mut heap, statement)?;
         }
         chunk.write_instr(Instruction::Return);
-        Ok((chunk, heap))
+        Ok((ObjFunction::new("".into(), 0, chunk), heap))
     }
     fn gen_statement(
         &mut self,
@@ -244,7 +246,7 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode.unwrap().0, c);
+        assert_eq!(bytecode.unwrap().0.chunk, c);
     }
     #[test]
     fn prog_simple() {
@@ -268,7 +270,7 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode.unwrap().0, c);
+        assert_eq!(bytecode.unwrap().0.chunk, c);
     }
     #[test]
     fn unary_simple() {
@@ -284,7 +286,7 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode.unwrap().0, c);
+        assert_eq!(bytecode.unwrap().0.chunk, c);
     }
     #[test]
     fn undefined_variable() {
@@ -343,7 +345,7 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode, c);
+        assert_eq!(bytecode.chunk, c);
     }
     #[test]
     fn string_literal() {
@@ -364,7 +366,7 @@ mod test {
         }
         c.values = vec![Value::Object(0), Value::Object(1)];
 
-        assert_eq!(bytecode.0, c);
+        assert_eq!(bytecode.0.chunk, c);
         assert_eq!(bytecode.1.get(0).unwrap(), &Object::String("oof".into()));
         assert_eq!(bytecode.1.get(1).unwrap(), &Object::String("ooo".into()));
     }
@@ -398,7 +400,7 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode.0, c);
+        assert_eq!(bytecode.0.chunk, c);
     }
     #[test]
     fn if_else_short() {
@@ -434,7 +436,7 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode.0, c);
+        assert_eq!(bytecode.0.chunk, c);
     }
     #[test]
     fn if_else_long() {
@@ -485,6 +487,6 @@ mod test {
                 Instruction::Return,
             ],
         );
-        assert_eq!(bytecode.0, c);
+        assert_eq!(bytecode.0.chunk, c);
     }
 }

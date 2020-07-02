@@ -2,8 +2,16 @@ pub mod chunk;
 pub mod heap;
 
 use chunk::{Chunk, Instruction, Opcode, Value};
-use heap::{Heap, Object};
+use heap::{Handle, Heap, ObjFunction, Object};
 use num_traits::FromPrimitive;
+//use crate::test_utils::let_stmt;
+
+struct CallFrame {
+    function: Handle,
+    pc: usize, // cached
+    // Stack start on the value stack
+    stack_start: usize,
+}
 
 #[derive(Debug, Copy, Clone)]
 struct Offset(bool, usize);
@@ -33,24 +41,40 @@ pub enum RuntimeError {
     InvalidType, // TODO
     StackUnderflow,
     StackOutOfRange,
+    NoCallFrame,
     CannotFindConstant,
     CannotFindObject,
     JumpOutOfRange,
+    WrongArity,
 }
 pub struct Vm {
     heap: Heap,
-    chunk: Chunk,
     pc: usize,
+
     stack: Vec<Value>,
+    call_frames: Vec<CallFrame>,
 }
 impl Vm {
-    pub fn new(chunk: Chunk, heap: Heap) -> Self {
+    pub fn new(main_function: ObjFunction, mut heap: Heap) -> Self {
+        let mut call_frames = Vec::with_capacity(256);
+        let handle = heap.push(Object::Function(main_function));
+        call_frames.push(CallFrame {
+            pc: 0,
+            function: handle,
+            stack_start: 0,
+        });
+
         Self {
             pc: 0,
-            chunk,
             heap,
             stack: Vec::new(),
+            call_frames,
         }
+    }
+    fn get_object(&self, handle: Handle) -> Result<&Object, RuntimeError> {
+        self.heap
+            .get(handle)
+            .ok_or_else(|| RuntimeError::CannotFindObject)
     }
     fn pop_stack(&mut self) -> Result<Value, RuntimeError> {
         let next = self.stack.pop().ok_or_else(|| RuntimeError::StackUnderflow);
@@ -65,7 +89,7 @@ impl Vm {
     }
     pub fn next_i16(&mut self) -> Result<i16, RuntimeError> {
         let next = self
-            .chunk
+            .current_chunk()?
             .read_i16(self.pc)
             .ok_or_else(|| RuntimeError::UnexpectedEof);
         self.pc += 2;
@@ -73,26 +97,47 @@ impl Vm {
     }
     pub fn next_byte(&mut self) -> Result<u8, RuntimeError> {
         let next = self
-            .chunk
+            .current_chunk()?
             .read_byte(self.pc)
             .ok_or_else(|| RuntimeError::UnexpectedEof);
         self.pc += 1;
         next
     }
+    fn current_chunk(&self) -> Result<&Chunk, RuntimeError> {
+        let current_function = self
+            .heap
+            .get(self.current_frame()?.function)
+            .ok_or_else(|| RuntimeError::CannotFindObject)?;
+
+        match current_function {
+            Object::Function(f) => Ok(&f.chunk),
+            _ => Err(RuntimeError::InvalidType), // TODO
+        }
+    }
+    fn current_frame_mut(&mut self) -> Result<&mut CallFrame, RuntimeError> {
+        self.call_frames
+            .last_mut()
+            .ok_or_else(|| RuntimeError::NoCallFrame)
+    }
+    fn current_frame(&self) -> Result<&CallFrame, RuntimeError> {
+        self.call_frames
+            .last()
+            .ok_or_else(|| RuntimeError::NoCallFrame)
+    }
     pub fn interpret(&mut self) -> Result<(), RuntimeError> {
         loop {
             let next_byte = self.next_byte()?;
             let op = Opcode::from_u8(next_byte).ok_or_else(|| RuntimeError::InvalidOpcode)?;
-
             match op {
                 Opcode::LoadConstant => {
                     let i = self.next_byte()?;
                     let value = self
-                        .chunk
+                        .current_chunk()?
                         .values
                         .get(i as usize)
-                        .ok_or_else(|| RuntimeError::CannotFindConstant)?;
-                    self.stack.push(value.clone());
+                        .ok_or_else(|| RuntimeError::CannotFindConstant)?
+                        .clone();
+                    self.stack.push(value);
                 }
                 Opcode::Add => {
                     let a = self.pop_stack()?;
@@ -112,7 +157,8 @@ impl Vm {
                                 (Object::String(sa), Object::String(sb)) => {
                                     let x = [&sa[..], &sb[..]].concat();
                                     self.heap.push(Object::String(x))
-                                } //_ => return Err(RuntimeError::InvalidType),
+                                }
+                                _ => return Err(RuntimeError::InvalidType),
                             };
 
                             Value::Object(handle)
@@ -160,9 +206,10 @@ impl Vm {
                     // Copies a local at a position in the index
                     // and copies to the stack top.
                     let index = self.next_byte()?;
+                    let offset = self.current_frame()?.stack_start;
                     let val = self
                         .stack
-                        .get(index as usize)
+                        .get(index as usize + offset)
                         .ok_or_else(|| RuntimeError::StackOutOfRange)?
                         .clone();
                     self.stack.push(val);
@@ -172,9 +219,10 @@ impl Vm {
                     // local somewhere down the stack
                     let index = self.next_byte()?;
                     let new_val = self.pop_stack()?;
+                    let offset = self.current_frame()?.stack_start;
                     let val = self
                         .stack
-                        .get_mut(index as usize)
+                        .get_mut(index as usize + offset)
                         .ok_or_else(|| RuntimeError::StackOutOfRange)?;
                     std::mem::replace(val, new_val);
                 }
@@ -227,8 +275,65 @@ impl Vm {
                     };
                     self.stack.push(result);
                 }
+                Opcode::Call => {
+                    // arity is in the operand
+                    let call_arity = self.next_byte()? as usize;
+                    // Important to archive the pc
+                    self.current_frame_mut()?.pc = self.pc;
+
+                    let next_function_value = self
+                        .stack
+                        .get(
+                            self.stack
+                                .len()
+                                .checked_sub(1 + call_arity)
+                                .ok_or_else(|| RuntimeError::WrongArity)?,
+                        )
+                        .ok_or_else(|| RuntimeError::WrongArity)?;
+
+                    let handle = next_function_value
+                        .as_object_handle()
+                        .ok_or_else(|| RuntimeError::WrongArity)?;
+
+                    let object = self.get_object(handle)?;
+
+                    match object {
+                        Object::Function(f) => {
+                            let arity = f.arity as usize;
+                            self.call_frames.push(CallFrame {
+                                function: handle,
+                                pc: 0,
+                                stack_start: self.stack.len() - arity - 1 as usize,
+                            })
+                        }
+                        _ => return Err(RuntimeError::InvalidType),
+                    }
+                    self.pc = 0;
+                }
                 Opcode::Return => {
-                    break;
+                    // root frame
+                    if self.call_frames.len() <= 1 {
+                        break;
+                    }
+                    let object = self.get_object(self.current_frame()?.function)?;
+
+                    let arity = match object {
+                        Object::Function(f) => f.arity as usize,
+                        _ => return Err(RuntimeError::InvalidType),
+                    };
+                    let return_value = self.pop_stack()?;
+
+                    // remove variables of callee function
+                    self.stack.truncate(
+                        self.stack
+                            .len()
+                            .checked_sub(arity + 1) // TODO
+                            .ok_or_else(|| RuntimeError::StackUnderflow)?,
+                    );
+                    // put back return value
+                    self.stack.push(return_value);
+                    self.call_frames.pop();
+                    self.pc = self.current_frame()?.pc;
                 }
             }
         }
@@ -242,7 +347,7 @@ mod test {
     use crate::test_utils::*;
     #[test]
     fn basic_vm() {
-        let c = chunk(
+        let f = main_func(
             vec![5, 3, 7],
             vec![
                 Instruction::LoadConstant(0),
@@ -254,13 +359,13 @@ mod test {
             ],
         );
 
-        let mut vm = Vm::new(c, Heap::new());
+        let mut vm = Vm::new(f, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(0).unwrap(), &Value::Integer(50));
     }
     #[test]
     fn unary_simple() {
-        let c = chunk(
+        let f = main_func(
             vec![2],
             vec![
                 Instruction::LoadConstant(0),
@@ -268,13 +373,13 @@ mod test {
                 Instruction::Return,
             ],
         );
-        let mut vm = Vm::new(c, Heap::new());
+        let mut vm = Vm::new(f, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(0).unwrap(), &Value::Integer(-2));
     }
     #[test]
     fn vm_stack_1() {
-        let c = chunk(
+        let f = main_func(
             vec![5, 3],
             vec![
                 Instruction::LoadConstant(0),
@@ -285,13 +390,13 @@ mod test {
                 Instruction::Return,
             ],
         );
-        let mut vm = Vm::new(c, Heap::new());
+        let mut vm = Vm::new(f, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(0).unwrap(), &Value::Integer(16));
     }
     #[test]
     fn vm_stack_2() {
-        let c = chunk(
+        let f = main_func(
             vec![5, 3, 7],
             vec![
                 Instruction::LoadConstant(0),
@@ -303,13 +408,13 @@ mod test {
             ],
         );
 
-        let mut vm = Vm::new(c, Heap::new());
+        let mut vm = Vm::new(f, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.get(2).unwrap(), &Value::Integer(5));
     }
     #[test]
     fn vm_stack_pop() {
-        let c = chunk(
+        let f = main_func(
             vec![11, 13, 15],
             vec![
                 Instruction::LoadConstant(0),
@@ -321,7 +426,7 @@ mod test {
             ],
         );
 
-        let mut vm = Vm::new(c, Heap::new());
+        let mut vm = Vm::new(f, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack.len(), 1);
         assert_eq!(vm.stack.get(0).unwrap(), &Value::Integer(11))
@@ -344,8 +449,9 @@ mod test {
         let mut h = Heap::new();
         h.push(Object::String("oof".into()));
         h.push(Object::String("ooo".into()));
+        let f = ObjFunction::new("".into(), 0, c);
 
-        let mut vm = Vm::new(c, h);
+        let mut vm = Vm::new(f, h);
         assert_eq!(vm.interpret(), Ok(()));
         let stack_top = vm.stack.get(0).unwrap();
         match stack_top {
@@ -358,7 +464,7 @@ mod test {
     }
     #[test]
     fn jump_conditional() {
-        let c = chunk(
+        let f = main_func(
             vec![11, 13, 100, 200],
             vec![
                 Instruction::LoadConstant(0),
@@ -370,13 +476,13 @@ mod test {
                 Instruction::Return,
             ],
         );
-        let mut vm = Vm::new(c, Heap::new());
+        let mut vm = Vm::new(f, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack, vec![Value::Bool(false), Value::Integer(200)])
     }
     #[test]
     fn jump() {
-        let c = chunk(
+        let f = main_func(
             vec![11, 13, 15],
             vec![
                 Instruction::LoadConstant(0),
@@ -388,11 +494,48 @@ mod test {
                 Instruction::Return,          //<--------|
             ],
         );
-        let mut vm = Vm::new(c, Heap::new());
+        let mut vm = Vm::new(f, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(
             vm.stack,
             vec![Value::Integer(11), Value::Integer(15), Value::Integer(13)]
         )
+    }
+    #[test]
+    fn function_call() {
+        let f = main_func_any_val(
+            vec![
+                Value::Object(0),
+                Value::Integer(5),
+                Value::Integer(13),
+                Value::Integer(15),
+            ],
+            vec![
+                Instruction::LoadConstant(1),
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(2),
+                Instruction::LoadConstant(3),
+                Instruction::Call(2),
+                Instruction::Multiply,
+                Instruction::Return,
+            ],
+        );
+        let a = function(
+            "sub",
+            2,
+            vec![],
+            vec![
+                Instruction::ReadLocal(1),
+                Instruction::ReadLocal(2),
+                Instruction::Subtract,
+                Instruction::Return,
+            ],
+        );
+        let mut h = Heap::new();
+        h.push(Object::Function(a));
+        dbg!(&f);
+        let mut vm = Vm::new(f, h);
+        assert_eq!(vm.interpret(), Ok(()));
+        assert_eq!(vm.stack, vec![Value::Integer(10)]);
     }
 }

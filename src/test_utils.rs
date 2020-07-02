@@ -4,6 +4,8 @@ use crate::compiler::error::ParseError;
 use crate::compiler::lexer::{Lexer, Token};
 use crate::compiler::parser::Parser;
 use crate::vm::chunk::*;
+use crate::vm::heap::ObjFunction;
+
 pub fn clear_expr_span(e: &mut Spanned<Expression>) {
     e.left = 0;
     e.right = 0;
@@ -179,6 +181,15 @@ pub fn block(statements: Vec<Spanned<Statement>>) -> Spanned<Block> {
 }
 
 // chunk utility
+pub fn chunk_any_vals(values: Vec<Value>, instrs: Vec<Instruction>) -> Chunk {
+    let mut c = Chunk::new();
+    for i in instrs {
+        c.write_instr(i);
+    }
+    c.values = values;
+    c
+}
+// chunk utility
 pub fn chunk(ints: Vec<i32>, instrs: Vec<Instruction>) -> Chunk {
     let mut c = Chunk::new();
     c.values = ints.iter().map(|x| Value::Integer(*x)).collect();
@@ -186,4 +197,15 @@ pub fn chunk(ints: Vec<i32>, instrs: Vec<Instruction>) -> Chunk {
         c.write_instr(i);
     }
     c
+}
+// a func with no arguments and no name accepting any value
+pub fn main_func_any_val(values: Vec<Value>, instrs: Vec<Instruction>) -> ObjFunction {
+    ObjFunction::new("".into(), 0, chunk_any_vals(values, instrs))
+}
+// a func with no arguments and no name
+pub fn main_func(ints: Vec<i32>, instrs: Vec<Instruction>) -> ObjFunction {
+    ObjFunction::new("".into(), 0, chunk(ints, instrs))
+}
+pub fn function(n: &str, arity: u8, ints: Vec<i32>, instrs: Vec<Instruction>) -> ObjFunction {
+    ObjFunction::new(n.into(), arity, chunk(ints, instrs))
 }
