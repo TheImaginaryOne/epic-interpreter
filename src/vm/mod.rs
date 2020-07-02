@@ -6,6 +6,7 @@ use heap::{Handle, Heap, ObjFunction, Object};
 use num_traits::FromPrimitive;
 //use crate::test_utils::let_stmt;
 
+#[derive(Debug)]
 struct CallFrame {
     function: Handle,
     pc: usize, // cached
