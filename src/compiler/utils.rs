@@ -23,6 +23,7 @@ pub fn token_to_string(token: Token) -> String {
         Token::Let => "let",
         Token::If => "if",
         Token::Else => "else",
+        Token::Return => "return",
         Token::While => "while",
         Token::Fun => "fun",
         Token::Comma => "`,`",

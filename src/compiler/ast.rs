@@ -23,6 +23,7 @@ pub enum Statement {
     // let declaration
     LetBinding(Spanned<Identifier>, Spanned<Expression>),
     Expression(Spanned<Expression>),
+    Return(Option<Spanned<Expression>>),
     // TODO modify later!
     Block(Block),
     IfElse(

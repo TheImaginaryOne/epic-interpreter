@@ -48,6 +48,11 @@ pub fn clear_stmt_span(stmt: &mut Spanned<Statement>) {
     stmt.left = 0;
     stmt.right = 0;
     match &mut stmt.inner {
+        Statement::Return(e) => {
+            if let Some(x) = e {
+                clear_expr_span(x);
+            }
+        }
         Statement::Expression(e) => {
             clear_expr_span(e);
         }
@@ -116,6 +121,9 @@ pub fn dummy_span<T>(e: T) -> Spanned<T> {
     }
 }
 
+pub fn return_stmt(expr: Option<Spanned<Expression>>) -> Spanned<Statement> {
+    dummy_span(Statement::Return(expr))
+}
 pub fn expr_stmt(expr: Spanned<Expression>) -> Spanned<Statement> {
     dummy_span(Statement::Expression(expr))
 }

@@ -38,15 +38,15 @@ impl CodeGen {
             //current_function: ObjFunction::new("bob".into(), 0),
         }
     }
+    /// Generate a program
     pub fn generate(
         &mut self,
         statements: &Vec<Spanned<Statement>>,
     ) -> Result<(ObjFunction, Heap), CodeGenError> {
         let mut heap = Heap::new(); // TODO this might be changed later, editing a Heap directly is a bit strange
-        Ok((
-            ObjFunction::new("".into(), 0, self.gen_chunk(statements, &mut heap)?),
-            heap,
-        ))
+        let mut chunk = self.gen_chunk(statements, &mut heap)?;
+        chunk.write_instr(Instruction::Return);
+        Ok((ObjFunction::new("".into(), 0, chunk), heap))
     }
     /// generate one chunk for a function
     fn gen_chunk(
@@ -58,7 +58,6 @@ impl CodeGen {
         for statement in statements {
             self.gen_statement(&mut chunk, heap, statement)?;
         }
-        chunk.write_instr(Instruction::Return);
         Ok(chunk)
     }
     fn gen_statement(
@@ -77,6 +76,14 @@ impl CodeGen {
                 self.add_local(&ident.inner);
             }
             Statement::Expression(expr) => self.gen_expression(chunk, heap, &expr)?,
+            Statement::Return(expr_opt) => {
+                if let Some(expr) = expr_opt {
+                    self.gen_expression(chunk, heap, &expr)?;
+                } else {
+                    chunk.write_instr(Instruction::LoadNil);
+                }
+                chunk.write_instr(Instruction::Return);
+            }
             Statement::Block(block) => {
                 self.current_scope += 1;
                 self.gen_block(chunk, heap, block)?;
@@ -443,7 +450,7 @@ mod test {
             func_stmt(
                 "sub",
                 vec!["a", "b"],
-                block(vec![expr_stmt(bin(expr_id("a"), "-", expr_id("b")))]),
+                block(vec![return_stmt(Some(bin(expr_id("a"), "-", expr_id("b"))))]),
             ),
             let_stmt(
                 id("aa"),

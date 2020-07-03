@@ -314,6 +314,18 @@ impl<'a> Parser<'a> {
                 Token::While => self.parse_while(errors),
                 Token::Fun => self.parse_function(errors),
                 Token::If => self.parse_if(errors),
+                Token::Return => {
+                    let return_token = self.next_token()?;
+
+                    if let Some(t) = self.take_optional_token(Token::Semicolon)? {
+                        Ok(Spanned::new(return_token.left, Statement::Return(None), t.right))
+                    } else {
+                        let expr = self.parse_expr()?;
+                        let r = expr.right;
+                        self.expect_token(Token::Semicolon)?;
+                        Ok(Spanned::new(return_token.left, Statement::Return(Some(expr)), r))
+                    }
+                }
                 // expression statement
                 _ => self.parse_expr().and_then(|expr| {
                     let r = expr.right;
