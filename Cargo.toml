@@ -12,4 +12,4 @@ anyhow = "1.0"
 num-traits = "0.2"
 enum-primitive-derive = "0.2"
 codespan-reporting = "0.9"
-
+clap = "3.0.0-beta.1"

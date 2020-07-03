@@ -7,6 +7,7 @@ pub mod test_utils;
 mod compiler;
 mod vm;
 
+use clap::Clap;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
@@ -23,41 +24,45 @@ fn main() {
     }
 }
 
+#[derive(Clap)]
+struct Options {
+    #[clap(short, long)]
+    filename: String,
+    #[clap(short, long)]
+    debug: bool,
+}
+
 fn run() -> anyhow::Result<()> {
-    let src = r#"
-    let x = 0;
-    if 53 == 51 - 2 {
-        x = -600
-    } else if 44 == 43 + 1 {
-        if -x * (-1) == x {
-            x = 40000;
-        }
-    } else {
-        x = -98480984;
-    }
-    let u = 122;
-"#;
+    let options = Options::parse();
+    // TODO
+    let src = std::fs::read_to_string(std::path::Path::new(&options.filename))?;
+
     let mut reporter = SimpleFiles::new();
-    let file = reporter.add("source", src);
+    let file = reporter.add("source", &src);
 
     let mut diagnostics = Vec::new();
-    let (bytecode, heap) = match Parser::new(src).parse_program() {
+    let (bytecode, heap) = match Parser::new(&src).parse_program() {
         Ok(p) => match CodeGen::new().generate(&p) {
             Ok(b) => b,
             Err(e) => {
                 eprintln!("{:?}", e);
-                return Ok(())
+                return Ok(());
             }
         },
         Err(errors) => {
             let writer = StandardStream::stderr(ColorChoice::Always);
             let config = codespan_reporting::term::Config::default();
-            
+
             for err in errors {
                 diagnostics.push(diagnostic_from(file, err));
             }
             for diagnostic in diagnostics {
-                codespan_reporting::term::emit(&mut writer.lock(), &config, &reporter, &diagnostic)?;
+                codespan_reporting::term::emit(
+                    &mut writer.lock(),
+                    &config,
+                    &reporter,
+                    &diagnostic,
+                )?;
             }
             return Ok(());
         }
@@ -67,15 +72,14 @@ fn run() -> anyhow::Result<()> {
         Ok(_) => (),
         Err(e) => eprintln!("{:?}", e),
     }
-    println!("{:#?}", vm);
+    if options.debug {
+        println!("-- DEBUG INFO --");
+        println!("{:#?}", vm);
+    }
     Ok(())
 }
 
-fn diagnostic_from(
-    file: usize,
-    err: Spanned<ParseError>,
-) -> Diagnostic<usize> {
-
+fn diagnostic_from(file: usize, err: Spanned<ParseError>) -> Diagnostic<usize> {
     Diagnostic::error()
         .with_message(format!("{}", err.inner))
         .with_labels(vec![Label::primary(file, err.left..err.right)])
