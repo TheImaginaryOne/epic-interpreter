@@ -336,6 +336,21 @@ mod test {
     use super::*;
     use crate::test_utils::*;
     #[test]
+    fn nil_test() {
+        let f = main_func(
+            vec![22],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::LoadNil,
+                Instruction::Return,
+            ],
+        );
+
+        let mut vm = Vm::new(f, Heap::new());
+        assert_eq!(vm.interpret(), Ok(()));
+        assert_eq!(vm.stack, vec![Value::Integer(22), Value::Nil]);
+    }
+    #[test]
     fn basic_vm() {
         let f = main_func(
             vec![5, 3, 7],

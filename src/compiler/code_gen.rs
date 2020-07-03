@@ -147,7 +147,12 @@ impl CodeGen {
                     inner_code_gen.add_local(&arg.inner);
                 }
 
-                let inner_chunk = inner_code_gen.gen_chunk(&body.inner.0, heap)?;
+                let mut inner_chunk = inner_code_gen.gen_chunk(&body.inner.0, heap)?;
+                // if the function returns before, these instructions are
+                // unneeded, but if the function returns nothing then Nil must
+                // be implicitly returned.
+                inner_chunk.write_instr(Instruction::LoadNil);
+                inner_chunk.write_instr(Instruction::Return);
                 // functions are first class objects! add them to the stack
                 let handle = heap.push(Object::Function(ObjFunction {
                     arity: arguments.len() as u8,
@@ -425,6 +430,9 @@ mod test {
                 Instruction::ReadLocal(2),
                 Instruction::ReadLocal(1),
                 Instruction::Subtract,
+                Instruction::Return,
+                // redundant
+                Instruction::LoadNil,
                 Instruction::Return,
             ],
         );
