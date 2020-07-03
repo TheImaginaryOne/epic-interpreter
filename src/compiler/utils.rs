@@ -23,8 +23,13 @@ pub fn token_to_string(token: Token) -> String {
         Token::Let => "let",
         Token::If => "if",
         Token::Else => "else",
+        Token::While => "while",
+        Token::Fun => "fun",
+        Token::Comma => "`,`",
         Token::Eof => "end of file",
-        _ => " ",
+
+        // these will not appear in error messages
+        Token::Whitespace | Token::Comment => "",
     }
     .to_string()
 }
