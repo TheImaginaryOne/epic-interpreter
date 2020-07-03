@@ -132,6 +132,17 @@ mod test {
         );
     }
     #[test]
+    fn func_decl_empty_params() {
+        assert_eq!(
+            parse_program("fun bob() {}"),
+            vec![func_stmt("bob", vec![], block(vec![])),]
+        );
+    }
+    #[test]
+    fn function_empty_args() {
+        assert_eq!(parse_dbg("bob()"), call_func("bob", vec![]));
+    }
+    #[test]
     fn function_call() {
         assert_eq!(
             parse_dbg("5 + bob(8*6, hi);"),
