@@ -133,7 +133,9 @@ impl<'a> Parser<'a> {
                     let condition = self.parse_expr()?;
                     let then = self.parse_block(errors)?;
                     then_clauses.push((condition, Box::new(then)));
-                    self.expect_token(Token::Else)?;
+                    if None == self.take_optional_token(Token::Else)? {
+                        break;
+                    }
                 } else {
                     // else block
                     let block = self.parse_block(errors)?;
