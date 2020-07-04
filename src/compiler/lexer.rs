@@ -27,6 +27,7 @@ pub enum Token {
     If,
     While,
     Else,
+    Return,
     Fun,
 
     Comment,
@@ -117,6 +118,7 @@ impl<'a> Lexer<'a> {
             "else" => Ok(Token::Else),
             "while" => Ok(Token::While),
             "fun" => Ok(Token::Fun),
+            "return" => Ok(Token::Return),
             _ => Ok(Token::Identifier),
         };
     }

@@ -317,26 +317,16 @@ impl Vm {
                     if self.call_frames.len() <= 1 {
                         break;
                     }
-                    let object = self.get_object(self.current_frame()?.function)?;
-
-                    let arity = match object {
-                        Object::Function(f) => f.arity as usize,
-                        _ => return Err(RuntimeError::InvalidType),
-                    };
                     let return_value = self.pop_stack()?;
 
                     // remove variables of callee function
-                    self.stack.truncate(
-                        self.stack
-                            .len()
-                            .checked_sub(arity + 1) // TODO
-                            .ok_or_else(|| RuntimeError::StackUnderflow)?,
-                    );
+                    self.stack.truncate(self.current_frame()?.stack_start);
                     // put back return value
                     self.stack.push(return_value);
                     self.call_frames.pop();
                     self.pc = self.current_frame()?.pc;
                 }
+                Opcode::LoadNil => self.stack.push(Value::Nil),
             }
         }
         Ok(())
@@ -347,6 +337,21 @@ impl Vm {
 mod test {
     use super::*;
     use crate::test_utils::*;
+    #[test]
+    fn nil_test() {
+        let f = main_func(
+            vec![22],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::LoadNil,
+                Instruction::Return,
+            ],
+        );
+
+        let mut vm = Vm::new(f, Heap::new());
+        assert_eq!(vm.interpret(), Ok(()));
+        assert_eq!(vm.stack, vec![Value::Integer(22), Value::Nil]);
+    }
     #[test]
     fn basic_vm() {
         let f = main_func(

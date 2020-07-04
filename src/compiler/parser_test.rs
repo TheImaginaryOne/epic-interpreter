@@ -132,6 +132,31 @@ mod test {
         );
     }
     #[test]
+    fn func_decl_empty_params() {
+        assert_eq!(
+            parse_program("fun bob() {}"),
+            vec![func_stmt("bob", vec![], block(vec![])),]
+        );
+    }
+    #[test]
+    fn function_empty_args() {
+        assert_eq!(parse_dbg("bob()"), call_func("bob", vec![]));
+    }
+    #[test]
+    fn return_nothing() {
+        assert_eq!(
+            parse_program("return ;"),
+            vec![return_stmt(None)]
+        );
+    }
+    #[test]
+    fn return_simple() {
+        assert_eq!(
+            parse_program("return 8 - 9;"),
+            vec![return_stmt(Some(bin(int(8), "-", int(9))))]
+        );
+    }
+    #[test]
     fn function_call() {
         assert_eq!(
             parse_dbg("5 + bob(8*6, hi);"),

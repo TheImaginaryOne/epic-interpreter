@@ -2,8 +2,8 @@ use std::iter::Peekable;
 use std::str::FromStr;
 
 use crate::compiler::ast::{
-    assign, binary, unary, BinaryOp, Block, Expression, Identifier, Literal, Spanned, Statement,
-    UnaryOp,
+    assignment, binary, unary, BinaryOp, Block, Expression, Identifier, Literal, Spanned,
+    Statement, UnaryOp,
 };
 use crate::compiler::error::ParseError;
 use crate::compiler::lexer::{Lexer, Token};
@@ -211,17 +211,18 @@ impl<'a> Parser<'a> {
         let name = self.expect_token(Token::Identifier)?;
         self.expect_token(Token::LParen)?;
 
-        // parameters
-        loop {
-            let parameter_sp = self.expect_token(Token::Identifier)?;
-            identifiers.push(parameter_sp);
-            if self.peek_token()?.inner == Token::RParen {
-                self.lexer.next();
-                break;
+        if let None = self.take_optional_token(Token::RParen)? {
+            // parameters
+            loop {
+                let parameter_sp = self.expect_token(Token::Identifier)?;
+                identifiers.push(parameter_sp);
+                if self.peek_token()?.inner == Token::RParen {
+                    self.lexer.next();
+                    break;
+                }
+                self.expect_token(Token::Comma)?;
             }
-            self.expect_token(Token::Comma)?;
         }
-        dbg!(&self.peek_token());
         let body = self.parse_block(errors)?;
 
         let right = body.right;
@@ -246,17 +247,21 @@ impl<'a> Parser<'a> {
         if let Expression::Identifier(ident) = left_expr_sp.inner {
             let mut arguments = Vec::new();
             // <ident> "(" already consumed
-            let right = loop {
-                let expr_sp = self.parse_expr()?;
-                arguments.push(Box::new(expr_sp));
-                if self.peek_token()?.inner == Token::RParen {
-                    break self.next_token()?.left;
+            let right = if let Some(t) = self.take_optional_token(Token::RParen)? {
+                t.right
+            } else {
+                loop {
+                    let expr_sp = self.parse_expr()?;
+                    arguments.push(Box::new(expr_sp));
+                    if self.peek_token()?.inner == Token::RParen {
+                        break self.next_token()?.left;
+                    }
+                    self.expect_token(Token::Comma)?;
                 }
-                self.expect_token(Token::Comma)?;
             };
             Ok(Spanned::new(
                 left_expr_sp.left,
-                Expression::CallFunction(
+                Expression::FunctionCall(
                     Spanned::new(left_expr_sp.left, ident, left_expr_sp.right),
                     arguments,
                 ),
@@ -308,6 +313,18 @@ impl<'a> Parser<'a> {
                 Token::While => self.parse_while(errors),
                 Token::Fun => self.parse_function(errors),
                 Token::If => self.parse_if(errors),
+                Token::Return => {
+                    let return_token = self.next_token()?;
+
+                    if let Some(t) = self.take_optional_token(Token::Semicolon)? {
+                        Ok(Spanned::new(return_token.left, Statement::Return(None), t.right))
+                    } else {
+                        let expr = self.parse_expr()?;
+                        let r = expr.right;
+                        self.expect_token(Token::Semicolon)?;
+                        Ok(Spanned::new(return_token.left, Statement::Return(Some(expr)), r))
+                    }
+                }
                 // expression statement
                 _ => self.parse_expr().and_then(|expr| {
                     let r = expr.right;
@@ -347,6 +364,18 @@ impl<'a> Parser<'a> {
             .map_err(|e| Spanned::new(e.left, ParseError::LexError(e.inner), e.right))?)
     }
 
+    /// If the token is the required one, it is consumed, otherwise the function returns an error.
+    fn take_optional_token(
+        &mut self,
+        t: Token,
+    ) -> Result<Option<Spanned<Token>>, Spanned<ParseError>> {
+        let token_sp = self.peek_token()?;
+        if token_sp.inner != t {
+            return Ok(None);
+        }
+        self.lexer.next();
+        Ok(Some(token_sp))
+    }
     /// If the token is the required one, it is consumed, otherwise the function returns an error.
     fn expect_token(&mut self, t: Token) -> Result<Spanned<Token>, Spanned<ParseError>> {
         let token_sp = self.peek_token()?;
@@ -474,7 +503,7 @@ impl<'a> Parser<'a> {
                     // case for expressions like x = 889 + 77
                     if let Expression::Identifier(i) = left_expr_sp.inner {
                         let right = right_expr_sp.right;
-                        left_expr_sp = assign(
+                        left_expr_sp = assignment(
                             left_expr_sp.left,
                             Spanned::new(left_expr_sp.left, i, left_expr_sp.right),
                             right_expr_sp,

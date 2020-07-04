@@ -29,12 +29,12 @@ pub fn clear_expr_span(e: &mut Spanned<Expression>) {
             o.left = 0;
             o.right = 0;
         }
-        Expression::Assign(i, e) => {
+        Expression::Assignment(i, e) => {
             i.left = 0;
             i.right = 0;
             clear_expr_span(e);
         }
-        Expression::CallFunction(n, arguments) => {
+        Expression::FunctionCall(n, arguments) => {
             n.left = 0;
             n.right = 0;
             for arg in arguments {
@@ -48,6 +48,11 @@ pub fn clear_stmt_span(stmt: &mut Spanned<Statement>) {
     stmt.left = 0;
     stmt.right = 0;
     match &mut stmt.inner {
+        Statement::Return(e) => {
+            if let Some(x) = e {
+                clear_expr_span(x);
+            }
+        }
         Statement::Expression(e) => {
             clear_expr_span(e);
         }
@@ -116,6 +121,9 @@ pub fn dummy_span<T>(e: T) -> Spanned<T> {
     }
 }
 
+pub fn return_stmt(expr: Option<Spanned<Expression>>) -> Spanned<Statement> {
+    dummy_span(Statement::Return(expr))
+}
 pub fn expr_stmt(expr: Spanned<Expression>) -> Spanned<Statement> {
     dummy_span(Statement::Expression(expr))
 }
@@ -141,7 +149,7 @@ pub fn if_else_stmt(
     ))
 }
 pub fn call_func(n: &str, args: Vec<Spanned<Expression>>) -> Spanned<Expression> {
-    dummy_span(Expression::CallFunction(
+    dummy_span(Expression::FunctionCall(
         id(n),
         args.into_iter().map(|x| Box::new(x)).collect(),
     ))
@@ -169,7 +177,7 @@ pub fn asgn(e1: Spanned<Identifier>, e2: Spanned<Expression>) -> Spanned<Express
     Spanned {
         left: 0,
         right: 0,
-        inner: Expression::Assign(e1, Box::new(e2)),
+        inner: Expression::Assignment(e1, Box::new(e2)),
     }
 }
 pub fn bin(e1: Spanned<Expression>, op_str: &str, e2: Spanned<Expression>) -> Spanned<Expression> {
