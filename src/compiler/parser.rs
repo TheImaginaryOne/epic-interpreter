@@ -223,7 +223,6 @@ impl<'a> Parser<'a> {
                 self.expect_token(Token::Comma)?;
             }
         }
-        dbg!(&self.peek_token());
         let body = self.parse_block(errors)?;
 
         let right = body.right;
