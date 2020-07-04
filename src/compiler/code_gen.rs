@@ -258,7 +258,7 @@ impl CodeGen {
                 // TODO allow later declaration of functions
                 let func_index = self.resolve_local(&name.inner)?;
                 // Load the function into the stack as a reference to the ObjFunction
-                chunk.write_instr(Instruction::LoadConstant(func_index));
+                chunk.write_instr(Instruction::ReadLocal(func_index));
                 for arg in arguments {
                     // compile arguments
                     self.gen_expression(chunk, heap, arg)?;
@@ -421,7 +421,7 @@ mod test {
             vec![
                 Instruction::LoadConstant(0),
                 Instruction::LoadConstant(1),
-                Instruction::LoadConstant(0),
+                Instruction::ReadLocal(0),
                 Instruction::LoadConstant(2),
                 Instruction::LoadConstant(3),
                 Instruction::Call(2),
