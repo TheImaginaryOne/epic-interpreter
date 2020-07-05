@@ -198,7 +198,8 @@ impl std::fmt::Debug for Chunk {
             write!(f, "{}: {:?}, ", pc, instr)?;
             pc += offset;
         }
-        write!(f, "]")?;
+        write!(f, "] ")?;
+        writeln!(f, "values: {:?}", self.values)?;
         Ok(())
     }
 }

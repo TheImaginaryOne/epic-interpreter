@@ -1,12 +1,11 @@
 pub mod chunk;
 pub mod heap;
-
 use chunk::{Chunk, Instruction, Opcode, Value};
 use heap::{Handle, Heap, ObjFunction, Object};
 use num_traits::FromPrimitive;
 //use crate::test_utils::let_stmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct CallFrame {
     function: Handle,
     pc: usize, // cached
@@ -55,22 +54,25 @@ pub struct Vm {
 
     stack: Vec<Value>,
     call_frames: Vec<CallFrame>,
+    current_frame: CallFrame,
 }
 impl Vm {
     pub fn new(main_function: ObjFunction, mut heap: Heap) -> Self {
-        let mut call_frames = Vec::with_capacity(256);
+        let mut call_frames = Vec::new();
         let handle = heap.push(Object::Function(main_function));
-        call_frames.push(CallFrame {
+        let first_frame = CallFrame {
             pc: 0,
             function: handle,
             stack_start: 0,
-        });
+        };
+        call_frames.push(first_frame.clone());
 
         Self {
             pc: 0,
             heap,
             stack: Vec::new(),
             call_frames,
+            current_frame: first_frame,
         }
     }
     fn get_object(&self, handle: Handle) -> Result<&Object, RuntimeError> {
@@ -108,7 +110,7 @@ impl Vm {
     fn current_chunk(&self) -> Result<&Chunk, RuntimeError> {
         let current_function = self
             .heap
-            .get(self.current_frame()?.function)
+            .get(self.current_frame.function)
             .ok_or_else(|| RuntimeError::CannotFindObject)?;
 
         match current_function {
@@ -116,20 +118,11 @@ impl Vm {
             _ => Err(RuntimeError::InvalidType), // TODO
         }
     }
-    fn current_frame_mut(&mut self) -> Result<&mut CallFrame, RuntimeError> {
-        self.call_frames
-            .last_mut()
-            .ok_or_else(|| RuntimeError::NoCallFrame)
-    }
-    fn current_frame(&self) -> Result<&CallFrame, RuntimeError> {
-        self.call_frames
-            .last()
-            .ok_or_else(|| RuntimeError::NoCallFrame)
-    }
     pub fn interpret(&mut self) -> Result<(), RuntimeError> {
         loop {
             let next_byte = self.next_byte()?;
             let op = Opcode::from_u8(next_byte).ok_or_else(|| RuntimeError::InvalidOpcode)?;
+            //println!("{}: {:?} --- {:?}", self.pc - 1, &op, self.stack);
             match op {
                 Opcode::LoadConstant => {
                     let i = self.next_byte()?;
@@ -208,7 +201,7 @@ impl Vm {
                     // Copies a local at a position in the index
                     // and copies to the stack top.
                     let index = self.next_byte()?;
-                    let offset = self.current_frame()?.stack_start;
+                    let offset = self.current_frame.stack_start;
                     let val = self
                         .stack
                         .get(index as usize + offset)
@@ -221,7 +214,7 @@ impl Vm {
                     // local somewhere down the stack
                     let index = self.next_byte()?;
                     let new_val = self.pop_stack()?;
-                    let offset = self.current_frame()?.stack_start;
+                    let offset = self.current_frame.stack_start;
                     let val = self
                         .stack
                         .get_mut(index as usize + offset)
@@ -281,7 +274,7 @@ impl Vm {
                     // arity is in the operand
                     let call_arity = self.next_byte()? as usize;
                     // Important to archive the pc
-                    self.current_frame_mut()?.pc = self.pc;
+                    self.call_frames.last_mut().expect("Call frames shouldn't be empty").pc = self.pc;
 
                     let next_function_value = self
                         .stack
@@ -302,15 +295,17 @@ impl Vm {
                     match object {
                         Object::Function(f) => {
                             let arity = f.arity as usize;
-                            self.call_frames.push(CallFrame {
+                            let new_frame = CallFrame {
                                 function: handle,
                                 pc: 0,
                                 stack_start: self.stack.len() - arity - 1 as usize,
-                            })
+                            };
+                            self.call_frames.push(new_frame.clone());
+                            self.current_frame = new_frame;
+                            self.pc = 0;
                         }
                         _ => return Err(RuntimeError::InvalidType),
                     }
-                    self.pc = 0;
                 }
                 Opcode::Return => {
                     // root frame
@@ -320,11 +315,12 @@ impl Vm {
                     let return_value = self.pop_stack()?;
 
                     // remove variables of callee function
-                    self.stack.truncate(self.current_frame()?.stack_start);
+                    self.stack.truncate(self.current_frame.stack_start);
                     // put back return value
                     self.stack.push(return_value);
                     self.call_frames.pop();
-                    self.pc = self.current_frame()?.pc;
+                    self.current_frame = self.call_frames.last().ok_or_else(|| RuntimeError::NoCallFrame)?.clone();
+                    self.pc = self.current_frame.pc;
                 }
                 Opcode::LoadNil => self.stack.push(Value::Nil),
             }
@@ -540,7 +536,6 @@ mod test {
         );
         let mut h = Heap::new();
         h.push(Object::Function(a));
-        dbg!(&f);
         let mut vm = Vm::new(f, h);
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack, vec![Value::Integer(10)]);
