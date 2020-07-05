@@ -170,6 +170,19 @@ impl CodeGen {
                 chunk.write_instr(Instruction::LoadConstant(i as u8 /* TODO */));
                 self.add_local(&name.inner);
             }
+            Statement::While(condition, body) => {
+                let start = chunk.next_location();
+                self.gen_expression(chunk, heap, condition)?;
+                // to patch later
+                let jump = chunk.write_instr(Instruction::JumpIfFalse(0));
+                chunk.write_instr(Instruction::PopStack);
+                self.gen_block(chunk, heap, &body.as_ref().inner)?;
+
+                let end = chunk.next_location() + 3;
+                chunk.write_instr(Instruction::Jump(start as i16 - end as i16));
+                self.patch_jump(chunk, jump, chunk.next_location());
+                chunk.write_instr(Instruction::PopStack);
+            }
             _ => todo!(),
         }
         Ok(())
@@ -482,6 +495,38 @@ mod test {
         assert_eq!(bytecode.0.chunk, c);
         assert_eq!(bytecode.1.get(0).unwrap(), &Object::String("oof".into()));
         assert_eq!(bytecode.1.get(1).unwrap(), &Object::String("ooo".into()));
+    }
+    // WARNING!! Monster code blocks ahead
+    #[test]
+    fn while_simple() {
+        let ast = vec![
+            let_stmt(id("x"), int(0)),
+            while_stmt(
+                bin(expr_id("x"), "<", int(6)),
+                block(vec![expr_stmt(asgn(id("x"), bin(int(1), "+", expr_id("x"))))]),
+            ),
+        ];
+        let mut code_gen = CodeGen::new();
+        let bytecode = code_gen.generate(&ast).unwrap();
+        let c = chunk(
+            vec![0, 6, 1],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
+                Instruction::ReadLocal(0),
+                Instruction::Less,
+                Instruction::JumpIfFalse(11), //
+                Instruction::PopStack,
+                Instruction::ReadLocal(0),
+                Instruction::LoadConstant(2),
+                Instruction::Add,
+                Instruction::WriteLocal(0),
+                Instruction::Jump(-19),
+                Instruction::PopStack,
+                Instruction::Return,
+            ],
+        );
+        assert_eq!(bytecode.0.chunk, c);
     }
     // WARNING!! Monster code blocks ahead
     #[test]
