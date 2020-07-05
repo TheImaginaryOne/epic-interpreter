@@ -294,7 +294,11 @@ impl Vm {
 
                     match object {
                         Object::Function(f) => {
+
                             let arity = f.arity as usize;
+                            if arity != call_arity {
+                                return Err(RuntimeError::WrongArity);
+                            }
                             let new_frame = CallFrame {
                                 function: handle,
                                 pc: 0,
