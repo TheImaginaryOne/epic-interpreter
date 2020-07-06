@@ -23,18 +23,25 @@ struct Local {
     name: String,
     scope: u8,
 }
-pub struct CodeGen {
+pub struct CodeGen<'a> {
     // TODO for now there must be <= 256 locals
     locals: Vec<Local>,
     current_scope: u8,
+    is_root: bool,
+    parent: Option<&'a CodeGen<'a>>,
     //current_function: ObjFunction,
 }
 #[allow(dead_code)]
-impl CodeGen {
+impl<'a> CodeGen<'a> {
     pub fn new() -> Self {
+        Self::new_internal(true, None)
+    }
+    pub fn new_internal(is_root: bool, parent: Option<&'a CodeGen<'a>>) -> Self {
         Self {
             locals: Vec::new(),
             current_scope: 0,
+            is_root,
+            parent,
             //current_function: ObjFunction::new("bob".into(), 0),
         }
     }
@@ -146,7 +153,7 @@ impl CodeGen {
                     return Err(CodeGenError::new(CodeGenErrorType::TooManyArguments));
                 }
                 // generate function as an inner chunk
-                let mut inner_code_gen = CodeGen::new();
+                let mut inner_code_gen = CodeGen::new_internal(false, Some(self));
                 // refer to own value to add support for recursion!
                 inner_code_gen.add_local(&name.inner);
                 for arg in arguments {
@@ -197,6 +204,15 @@ impl CodeGen {
             name: name.name.clone(),
             scope: self.current_scope,
         });
+    }
+    fn resolve_upper(&self, id: &Identifier) -> Result<u8, CodeGenError> {
+        if self.is_root {
+            self.resolve_local(id)
+        } else {
+            self.parent
+                .ok_or(CodeGenError::new(CodeGenErrorType::UndefinedVariable))?
+                .resolve_local(id)
+        }
     }
     fn resolve_local(&self, id: &Identifier) -> Result<u8, CodeGenError> {
         for (i, local) in self.locals.iter().rev().enumerate() {
@@ -254,12 +270,20 @@ impl CodeGen {
             }
             Expression::Assignment(id, e1) => {
                 self.gen_expression(chunk, heap, e1)?;
-                let index = self.resolve_local(&id.inner)?;
-                chunk.write_instr(Instruction::WriteLocal(index));
+                if let Ok(index) = self.resolve_local(&id.inner) {
+                    chunk.write_instr(Instruction::WriteLocal(index));
+                } else {
+                    let index = self.resolve_upper(&id.inner)?;
+                    chunk.write_instr(Instruction::WriteGlobal(index));
+                }
             }
             Expression::Identifier(id) => {
-                let index = self.resolve_local(&id)?;
-                chunk.write_instr(Instruction::ReadLocal(index));
+                if let Ok(index) = self.resolve_local(&id) {
+                    chunk.write_instr(Instruction::ReadLocal(index));
+                } else {
+                    let index = self.resolve_upper(&id)?;
+                    chunk.write_instr(Instruction::ReadGlobal(index));
+                }
             }
             Expression::Unary(op, e1) => {
                 self.gen_expression(chunk, heap, e1.as_ref())?;
@@ -267,11 +291,15 @@ impl CodeGen {
                     UnaryOp::Negate => chunk.write_instr(Instruction::Negate),
                 };
             }
-            Expression::FunctionCall(name, arguments) => {
+            Expression::FunctionCall(id, arguments) => {
                 // TODO allow later declaration of functions
-                let func_index = self.resolve_local(&name.inner)?;
                 // Load the function into the stack as a reference to the ObjFunction
-                chunk.write_instr(Instruction::ReadLocal(func_index));
+                if let Ok(index) = self.resolve_local(&id.inner) {
+                    chunk.write_instr(Instruction::ReadLocal(index));
+                } else {
+                    let index = self.resolve_upper(&id.inner)?;
+                    chunk.write_instr(Instruction::ReadGlobal(index));
+                }
                 for arg in arguments {
                     // compile arguments
                     self.gen_expression(chunk, heap, arg)?;
@@ -423,6 +451,44 @@ mod test {
         assert_eq!(bytecode.chunk, c);
     }
     #[test]
+    fn globals() {
+        let f = main_func_any_val(
+            vec![
+                Value::Integer(45),
+                Value::Object(0), // the function at heap location 0
+            ],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
+                Instruction::ReadLocal(1),
+                Instruction::Call(0),
+                Instruction::Return,
+            ],
+        );
+        let a = function(
+            "fa",
+            0,
+            vec![],
+            vec![
+                Instruction::ReadGlobal(0),
+                Instruction::Return,
+                // redundant
+                Instruction::LoadNil,
+                Instruction::Return,
+            ],
+        );
+        let mut h = Heap::new();
+        h.push(Object::Function(a));
+
+        let ast = vec![
+            let_stmt(id("aa"), int(45)),
+            func_stmt("fa", vec![], block(vec![return_stmt(Some(expr_id("aa")))])),
+            let_stmt(id("bb"), call_func("fa", vec![])),
+        ];
+
+        assert_eq!((f, h), CodeGen::new().generate(&ast).unwrap());
+    }
+    #[test]
     fn function_call() {
         let f = main_func_any_val(
             vec![
@@ -463,7 +529,11 @@ mod test {
             func_stmt(
                 "sub",
                 vec!["a", "b"],
-                block(vec![return_stmt(Some(bin(expr_id("a"), "-", expr_id("b"))))]),
+                block(vec![return_stmt(Some(bin(
+                    expr_id("a"),
+                    "-",
+                    expr_id("b"),
+                )))]),
             ),
             let_stmt(
                 id("aa"),
@@ -503,7 +573,10 @@ mod test {
             let_stmt(id("x"), int(0)),
             while_stmt(
                 bin(expr_id("x"), "<", int(6)),
-                block(vec![expr_stmt(asgn(id("x"), bin(int(1), "+", expr_id("x"))))]),
+                block(vec![expr_stmt(asgn(
+                    id("x"),
+                    bin(int(1), "+", expr_id("x")),
+                ))]),
             ),
         ];
         let mut code_gen = CodeGen::new();

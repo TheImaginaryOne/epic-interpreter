@@ -319,12 +319,20 @@ impl<'a> Parser<'a> {
                     let return_token = self.next_token()?;
 
                     if let Some(t) = self.take_optional_token(Token::Semicolon)? {
-                        Ok(Spanned::new(return_token.left, Statement::Return(None), t.right))
+                        Ok(Spanned::new(
+                            return_token.left,
+                            Statement::Return(None),
+                            t.right,
+                        ))
                     } else {
                         let expr = self.parse_expr()?;
                         let r = expr.right;
                         self.expect_token(Token::Semicolon)?;
-                        Ok(Spanned::new(return_token.left, Statement::Return(Some(expr)), r))
+                        Ok(Spanned::new(
+                            return_token.left,
+                            Statement::Return(Some(expr)),
+                            r,
+                        ))
                     }
                 }
                 // expression statement

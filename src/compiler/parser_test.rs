@@ -144,10 +144,7 @@ mod test {
     }
     #[test]
     fn return_nothing() {
-        assert_eq!(
-            parse_program("return ;"),
-            vec![return_stmt(None)]
-        );
+        assert_eq!(parse_program("return ;"), vec![return_stmt(None)]);
     }
     #[test]
     fn return_simple() {
@@ -265,32 +262,26 @@ mod test {
     fn if_no_else() {
         assert_eq!(
             parse_program("if y > 1 { x = 55; }"),
-            vec![if_stmt(
-                vec![
-                    (
-                        bin(expr_id("y"), ">", int(1)),
-                        block(vec![expr_stmt(asgn(id("x"), int(55)))])
-                    ),
-                ],
-            ),]
+            vec![if_stmt(vec![(
+                bin(expr_id("y"), ">", int(1)),
+                block(vec![expr_stmt(asgn(id("x"), int(55)))])
+            ),],),]
         );
     }
     #[test]
     fn if_else_if() {
         assert_eq!(
             parse_program("if y > 1 { x = 1; } else if y < 1 { x = 2; }"),
-            vec![if_stmt(
-                vec![
-                    (
-                        bin(expr_id("y"), ">", int(1)),
-                        block(vec![expr_stmt(asgn(id("x"), int(1)))])
-                    ),
-                    (
-                        bin(expr_id("y"), "<", int(1)),
-                        block(vec![expr_stmt(asgn(id("x"), int(2)))])
-                    )
-                ],
-            ),]
+            vec![if_stmt(vec![
+                (
+                    bin(expr_id("y"), ">", int(1)),
+                    block(vec![expr_stmt(asgn(id("x"), int(1)))])
+                ),
+                (
+                    bin(expr_id("y"), "<", int(1)),
+                    block(vec![expr_stmt(asgn(id("x"), int(2)))])
+                )
+            ],),]
         );
     }
 }

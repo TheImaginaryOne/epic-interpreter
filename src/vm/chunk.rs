@@ -39,6 +39,8 @@ pub enum Instruction {
     Greater,
     Call(u8),
     LoadNil,
+    ReadGlobal(u8),
+    WriteGlobal(u8),
 }
 #[derive(Primitive, Debug)]
 pub enum Opcode {
@@ -59,6 +61,8 @@ pub enum Opcode {
     Greater = 14,
     Call = 15,
     LoadNil = 16,
+    ReadGlobal = 17,
+    WriteGlobal = 18,
 }
 #[derive(PartialEq)]
 pub struct Chunk {
@@ -118,6 +122,16 @@ impl Chunk {
             Instruction::Negate => self.write_op(Opcode::Negate),
             Instruction::Multiply => self.write_op(Opcode::Multiply),
             Instruction::Divide => self.write_op(Opcode::Divide),
+            Instruction::ReadGlobal(b) => {
+                let offset = self.write_op(Opcode::ReadGlobal);
+                self.write_byte(b);
+                offset
+            }
+            Instruction::WriteGlobal(b) => {
+                let offset = self.write_op(Opcode::WriteGlobal);
+                self.write_byte(b);
+                offset
+            }
             Instruction::ReadLocal(b) => {
                 let offset = self.write_op(Opcode::ReadLocal);
                 self.write_byte(b);
@@ -174,6 +188,14 @@ impl std::fmt::Debug for Chunk {
                 Opcode::Negate => (Instruction::Negate, 1),
                 Opcode::Multiply => (Instruction::Multiply, 1),
                 Opcode::Divide => (Instruction::Divide, 1),
+                Opcode::ReadGlobal => (
+                    Instruction::ReadGlobal(self.read_byte(start).unwrap_or(0)),
+                    2,
+                ),
+                Opcode::WriteGlobal => (
+                    Instruction::WriteGlobal(self.read_byte(start).unwrap_or(0)),
+                    2,
+                ),
                 Opcode::ReadLocal => (
                     Instruction::ReadLocal(self.read_byte(start).unwrap_or(0)),
                     2,
@@ -227,6 +249,8 @@ mod test {
             (21, Instruction::Negate),
             (22, Instruction::Call(4)),
             (24, Instruction::LoadNil),
+            (25, Instruction::ReadLocal(2)),
+            (27, Instruction::WriteLocal(4)),
         ];
         for (offset, i) in instrs {
             assert_eq!(offset, c.write_instr(i.clone()));

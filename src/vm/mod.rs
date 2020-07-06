@@ -197,6 +197,30 @@ impl Vm {
                     };
                     self.stack.push(result);
                 }
+                // "Globals" are still on the stack but their index is not
+                // relative to the function stack offset
+                Opcode::ReadGlobal => {
+                    // Copies a local at a position in the index
+                    // and copies to the stack top.
+                    let index = self.next_byte()?;
+                    let val = self
+                        .stack
+                        .get(index as usize)
+                        .ok_or_else(|| RuntimeError::StackOutOfRange)?
+                        .clone();
+                    self.stack.push(val);
+                }
+                Opcode::WriteGlobal => {
+                    // Writes the stack top to a
+                    // local somewhere down the stack
+                    let index = self.next_byte()?;
+                    let new_val = self.pop_stack()?;
+                    let val = self
+                        .stack
+                        .get_mut(index as usize)
+                        .ok_or_else(|| RuntimeError::StackOutOfRange)?;
+                    std::mem::replace(val, new_val);
+                }
                 Opcode::ReadLocal => {
                     // Copies a local at a position in the index
                     // and copies to the stack top.
@@ -274,7 +298,10 @@ impl Vm {
                     // arity is in the operand
                     let call_arity = self.next_byte()? as usize;
                     // Important to archive the pc
-                    self.call_frames.last_mut().expect("Call frames shouldn't be empty").pc = self.pc;
+                    self.call_frames
+                        .last_mut()
+                        .expect("Call frames shouldn't be empty")
+                        .pc = self.pc;
 
                     let next_function_value = self
                         .stack
@@ -294,7 +321,6 @@ impl Vm {
 
                     match object {
                         Object::Function(f) => {
-
                             let arity = f.arity as usize;
                             if arity != call_arity {
                                 return Err(RuntimeError::WrongArity);
@@ -323,7 +349,11 @@ impl Vm {
                     // put back return value
                     self.stack.push(return_value);
                     self.call_frames.pop();
-                    self.current_frame = self.call_frames.last().ok_or_else(|| RuntimeError::NoCallFrame)?.clone();
+                    self.current_frame = self
+                        .call_frames
+                        .last()
+                        .ok_or_else(|| RuntimeError::NoCallFrame)?
+                        .clone();
                     self.pc = self.current_frame.pc;
                 }
                 Opcode::LoadNil => self.stack.push(Value::Nil),
@@ -351,6 +381,43 @@ mod test {
         let mut vm = Vm::new(f, Heap::new());
         assert_eq!(vm.interpret(), Ok(()));
         assert_eq!(vm.stack, vec![Value::Integer(22), Value::Nil]);
+    }
+    #[test]
+    fn globals() {
+        let f = main_func_any_val(
+            vec![
+                Value::Integer(45),
+                Value::Object(0), // the function at heap location 0
+            ],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
+                Instruction::ReadLocal(1),
+                Instruction::Call(0),
+                Instruction::Return,
+            ],
+        );
+        let a = function(
+            "fa",
+            0,
+            vec![],
+            vec![
+                Instruction::ReadGlobal(0),
+                Instruction::Return,
+                // redundant
+                Instruction::LoadNil,
+                Instruction::Return,
+            ],
+        );
+        let mut h = Heap::new();
+        h.push(Object::Function(a));
+
+        let mut vm = Vm::new(f, h);
+        assert_eq!(vm.interpret(), Ok(()));
+        assert_eq!(
+            vm.stack,
+            vec![Value::Integer(45), Value::Object(0), Value::Integer(45)]
+        );
     }
     #[test]
     fn basic_vm() {
