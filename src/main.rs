@@ -16,7 +16,7 @@ use compiler::ast::Spanned;
 use compiler::code_gen::CodeGen;
 use compiler::error::ParseError;
 use compiler::parser::Parser;
-use vm::Vm;
+use vm::{heap::Heap, natives, Vm};
 
 fn main() {
     if let Err(e) = run() {
@@ -42,7 +42,7 @@ fn run() -> anyhow::Result<()> {
 
     let mut diagnostics = Vec::new();
     let (bytecode, heap) = match Parser::new(&src).parse_program() {
-        Ok(p) => match CodeGen::new().generate(&p) {
+        Ok(p) => match CodeGen::new().generate(&p, natives::load_native_functions()) {
             Ok(b) => b,
             Err(e) => {
                 eprintln!("{:?}", e);

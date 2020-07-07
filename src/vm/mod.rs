@@ -1,5 +1,7 @@
 pub mod chunk;
 pub mod heap;
+pub mod natives;
+
 use chunk::{Chunk, Instruction, Opcode, Value};
 use heap::{Handle, Heap, ObjFunction, Object};
 use num_traits::FromPrimitive;
@@ -334,6 +336,25 @@ impl Vm {
                             self.current_frame = new_frame;
                             self.pc = 0;
                         }
+                        Object::NativeFunction(f) => {
+                            let arity = f.arity as usize;
+
+                            if arity != call_arity {
+                                return Err(RuntimeError::WrongArity);
+                            }
+                            let ret_value = f.function.0(
+                                &self.heap,
+                                &self.stack[self
+                                    .stack
+                                    .len()
+                                    .checked_sub(arity)
+                                    .ok_or(RuntimeError::WrongArity)?
+                                    ..self.stack.len()],
+                            );
+                            // pop the function, parameters, return value
+                            self.stack.truncate(self.stack.len() - arity - 1);
+                            self.stack.push(ret_value);
+                        }
                         _ => return Err(RuntimeError::InvalidType),
                     }
                 }
@@ -367,6 +388,38 @@ impl Vm {
 mod test {
     use super::*;
     use crate::test_utils::*;
+    use crate::vm::heap::*;
+    #[test]
+    fn native_test() {
+        fn native_fn(h: &Heap, v: &[Value]) -> Value {
+            match v[0] {
+                Value::Integer(i) => Value::Integer(i + 1),
+                _ => Value::Nil,
+            }
+        }
+
+        let f = main_func_any_val(
+            vec![Value::Object(0), Value::Integer(77)],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::ReadLocal(0),
+                Instruction::LoadConstant(1),
+                Instruction::Call(1),
+                Instruction::LoadNil,
+                Instruction::Return,
+            ],
+        );
+        let mut h = Heap::new();
+        h.push(Object::NativeFunction(NativeFunction {
+            name: "t".into(),
+            arity: 1,
+            function: RustFunction(Box::new(native_fn)),
+        }));
+
+        let mut vm = Vm::new(f, h);
+        assert_eq!(vm.interpret(), Ok(()));
+        assert_eq!(vm.stack, vec![Value::Object(0), Value::Integer(78), Value::Nil]);
+    }
     #[test]
     fn nil_test() {
         let f = main_func(

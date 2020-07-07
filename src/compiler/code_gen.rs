@@ -1,6 +1,6 @@
 use super::ast::{BinaryOp, Block, Expression, Identifier, Literal, Spanned, Statement, UnaryOp};
 use crate::vm::chunk::{Chunk, Instruction, Value};
-use crate::vm::heap::{Heap, ObjFunction, Object};
+use crate::vm::heap::{Heap, NativeFunction, ObjFunction, Object};
 
 #[derive(Debug)]
 pub struct CodeGenError {
@@ -49,9 +49,20 @@ impl<'a> CodeGen<'a> {
     pub fn generate(
         &mut self,
         statements: &Vec<Spanned<Statement>>,
+        natives: Vec<NativeFunction>,
     ) -> Result<(ObjFunction, Heap), CodeGenError> {
-        let mut heap = Heap::new(); // TODO this might be changed later, editing a Heap directly is a bit strange
-        let mut chunk = self.gen_chunk(statements, &mut heap)?;
+        let mut heap = Heap::new();
+        let mut chunk = Chunk::new();
+        for f in natives {
+            let name = f.name.clone();
+            let handle = heap.push(Object::NativeFunction(f));
+            let value_index = chunk.write_constant(Value::Object(handle));
+            chunk.write_instr(Instruction::LoadConstant(value_index as u8));
+            self.add_local(&Identifier { name });
+        }
+        for statement in statements {
+            self.gen_statement(&mut chunk, &mut heap, statement)?;
+        }
         chunk.write_instr(Instruction::Return);
         Ok((ObjFunction::new("".into(), 0, chunk), heap))
     }
@@ -322,133 +333,148 @@ mod test {
     use crate::vm::chunk::Instruction;
     use crate::vm::heap::Object;
 
+    fn check(ast: Vec<Spanned<Statement>>, chunk: ObjFunction, heap: Heap) {
+        let mut code_gen = CodeGen::new();
+        let (bytecode, heap2) = code_gen
+            .generate(&ast, vec![])
+            .expect("error generating chunk");
+        assert_eq!(heap, heap2);
+        assert_eq!(bytecode, chunk);
+    }
+    fn check_error(ast: Vec<Spanned<Statement>>, error: CodeGenErrorType) {
+        let mut code_gen = CodeGen::new();
+        let mut heap2 = Heap::new();
+        assert_eq!(error, code_gen.generate(&ast, vec![]).unwrap_err().ty);
+    }
     #[test]
     fn many_locals() {
-        let ast = vec![
-            let_stmt(id("xy"), int(12)),
-            let_stmt(id("xz"), bin(int(2), "+", expr_id("xy"))),
-            let_stmt(id("b"), bin(expr_id("xy"), "*", expr_id("xz"))),
-            let_stmt(id("c"), bin(expr_id("xz"), "/", expr_id("b"))),
-        ];
-
-        let mut code_gen = CodeGen::new();
-        let bytecode = code_gen.generate(&ast);
-        let c = chunk(
-            vec![12, 2],
+        check(
             vec![
-                Instruction::LoadConstant(0),
-                Instruction::ReadLocal(0),
-                Instruction::LoadConstant(1),
-                Instruction::Add,
-                Instruction::ReadLocal(1),
-                Instruction::ReadLocal(0),
-                Instruction::Multiply,
-                Instruction::ReadLocal(2),
-                Instruction::ReadLocal(1),
-                Instruction::Divide,
-                Instruction::Return,
+                let_stmt(id("xy"), int(12)),
+                let_stmt(id("xz"), bin(int(2), "+", expr_id("xy"))),
+                let_stmt(id("b"), bin(expr_id("xy"), "*", expr_id("xz"))),
+                let_stmt(id("c"), bin(expr_id("xz"), "/", expr_id("b"))),
             ],
+            main_func_any_val(
+                vec![Value::Integer(12), Value::Integer(2)],
+                vec![
+                    Instruction::LoadConstant(0),
+                    Instruction::ReadLocal(0),
+                    Instruction::LoadConstant(1),
+                    Instruction::Add,
+                    Instruction::ReadLocal(1),
+                    Instruction::ReadLocal(0),
+                    Instruction::Multiply,
+                    Instruction::ReadLocal(2),
+                    Instruction::ReadLocal(1),
+                    Instruction::Divide,
+                    Instruction::Return,
+                ],
+            ),
+            Heap::new(),
         );
-        assert_eq!(bytecode.unwrap().0.chunk, c);
     }
     #[test]
     fn prog_simple() {
-        let ast = vec![
-            let_stmt(id("xy"), bin(int(1), "*", int(2))),
-            expr_stmt(asgn(id("xy"), bin(expr_id("xy"), "+", int(11)))),
-        ];
-
-        let mut code_gen = CodeGen::new();
-        let bytecode = code_gen.generate(&ast);
-        let c = chunk(
-            vec![2, 1, 11],
+        check(
             vec![
-                Instruction::LoadConstant(0),
-                Instruction::LoadConstant(1),
-                Instruction::Multiply,
-                Instruction::LoadConstant(2),
-                Instruction::ReadLocal(0),
-                Instruction::Add,
-                Instruction::WriteLocal(0),
-                Instruction::Return,
+                let_stmt(id("xy"), bin(int(1), "*", int(2))),
+                expr_stmt(asgn(id("xy"), bin(expr_id("xy"), "+", int(11)))),
             ],
+            main_func_any_val(
+                vec![Value::Integer(2), Value::Integer(1), Value::Integer(11)],
+                vec![
+                    Instruction::LoadConstant(0),
+                    Instruction::LoadConstant(1),
+                    Instruction::Multiply,
+                    Instruction::LoadConstant(2),
+                    Instruction::ReadLocal(0),
+                    Instruction::Add,
+                    Instruction::WriteLocal(0),
+                    Instruction::Return,
+                ],
+            ),
+            Heap::new(),
         );
-        assert_eq!(bytecode.unwrap().0.chunk, c);
     }
     #[test]
     fn unary_simple() {
-        let ast = vec![let_stmt(id("xyx"), un("-", int(2)))];
-
-        let mut code_gen = CodeGen::new();
-        let bytecode = code_gen.generate(&ast);
-        let c = chunk(
-            vec![2],
-            vec![
-                Instruction::LoadConstant(0),
-                Instruction::Negate,
-                Instruction::Return,
-            ],
+        check(
+            vec![let_stmt(id("xyx"), un("-", int(2)))],
+            main_func_any_val(
+                vec![Value::Integer(2)],
+                vec![
+                    Instruction::LoadConstant(0),
+                    Instruction::Negate,
+                    Instruction::Return,
+                ],
+            ),
+            Heap::new(),
         );
-        assert_eq!(bytecode.unwrap().0.chunk, c);
     }
     #[test]
     fn undefined_variable() {
-        let ast = vec![
-            let_stmt(id("xy"), bin(int(1), "*", int(2))),
-            expr_stmt(asgn(id("xyz"), bin(int(3), "*", int(6)))),
-        ];
-
-        let mut code_gen = CodeGen::new();
-        let err = code_gen.generate(&ast).unwrap_err();
-        assert_eq!(err.ty, CodeGenErrorType::UndefinedVariable);
+        check_error(
+            vec![
+                let_stmt(id("xy"), bin(int(1), "*", int(2))),
+                expr_stmt(asgn(id("xyz"), bin(int(3), "*", int(6)))),
+            ],
+            CodeGenErrorType::UndefinedVariable,
+        );
     }
     #[test]
     fn duplicate_let() {
-        let ast = vec![
-            let_stmt(id("xy"), bin(int(1), "*", int(2))),
-            let_stmt(id("xy"), bin(int(3), "*", int(6))),
-        ];
-
-        let mut code_gen = CodeGen::new();
-        let err = code_gen.generate(&ast).unwrap_err();
-        assert_eq!(err.ty, CodeGenErrorType::VariableExists);
+        check_error(
+            vec![
+                let_stmt(id("xy"), bin(int(1), "*", int(2))),
+                let_stmt(id("xy"), bin(int(3), "*", int(6))),
+            ],
+            CodeGenErrorType::VariableExists,
+        );
     }
     #[test]
     fn undefined_variable_block_stmt() {
-        let ast = vec![
-            block_stmt(vec![let_stmt(id("bc"), int(3))]),
-            expr_stmt(asgn(id("bc"), int(6))),
-        ];
-        let err = CodeGen::new().generate(&ast).unwrap_err();
-        assert_eq!(err.ty, CodeGenErrorType::UndefinedVariable);
+        check_error(
+            vec![
+                block_stmt(vec![let_stmt(id("bc"), int(3))]),
+                expr_stmt(asgn(id("bc"), int(6))),
+            ],
+            CodeGenErrorType::UndefinedVariable,
+        );
     }
     #[test]
     fn simple_block() {
-        let ast = vec![
-            let_stmt(id("aa"), int(10)),
-            block_stmt(vec![
-                let_stmt(id("bc"), int(3)),
-                block_stmt(vec![let_stmt(id("cc"), int(5))]),
-                expr_stmt(asgn(id("aa"), bin(expr_id("bc"), "+", int(99)))),
-            ]),
-        ];
-        let (bytecode, _) = CodeGen::new().generate(&ast).unwrap();
-        let c = chunk(
-            vec![10, 3, 5, 99],
+        check(
             vec![
-                Instruction::LoadConstant(0),
-                Instruction::LoadConstant(1),
-                Instruction::LoadConstant(2),
-                Instruction::PopStack,
-                Instruction::LoadConstant(3),
-                Instruction::ReadLocal(1),
-                Instruction::Add,
-                Instruction::WriteLocal(0),
-                Instruction::PopStack,
-                Instruction::Return,
+                let_stmt(id("aa"), int(10)),
+                block_stmt(vec![
+                    let_stmt(id("bc"), int(3)),
+                    block_stmt(vec![let_stmt(id("cc"), int(5))]),
+                    expr_stmt(asgn(id("aa"), bin(expr_id("bc"), "+", int(99)))),
+                ]),
             ],
+            main_func_any_val(
+                vec![
+                    Value::Integer(10),
+                    Value::Integer(3),
+                    Value::Integer(5),
+                    Value::Integer(99),
+                ],
+                vec![
+                    Instruction::LoadConstant(0),
+                    Instruction::LoadConstant(1),
+                    Instruction::LoadConstant(2),
+                    Instruction::PopStack,
+                    Instruction::LoadConstant(3),
+                    Instruction::ReadLocal(1),
+                    Instruction::Add,
+                    Instruction::WriteLocal(0),
+                    Instruction::PopStack,
+                    Instruction::Return,
+                ],
+            ),
+            Heap::new(),
         );
-        assert_eq!(bytecode.chunk, c);
     }
     #[test]
     fn globals() {
@@ -486,7 +512,7 @@ mod test {
             let_stmt(id("bb"), call_func("fa", vec![])),
         ];
 
-        assert_eq!((f, h), CodeGen::new().generate(&ast).unwrap());
+        check(ast, f, h);
     }
     #[test]
     fn function_call() {
@@ -540,184 +566,199 @@ mod test {
                 bin(call_func("sub", vec![int(15), int(13)]), "*", int(5)),
             ),
         ];
-
-        assert_eq!((f, h), CodeGen::new().generate(&ast).unwrap());
+        check(ast, f, h);
     }
     #[test]
     fn string_literal() {
         let ast = vec![let_stmt(id("xy"), bin(string("ooo"), "+", string("oof")))];
 
-        let mut code_gen = CodeGen::new();
-        let bytecode = code_gen.generate(&ast).unwrap();
+        let mut heap = Heap::new();
+        heap.push(Object::String("oof".into()));
+        heap.push(Object::String("ooo".into()));
 
-        let mut c = Chunk::new();
-        let instrs = vec![
-            Instruction::LoadConstant(0),
-            Instruction::LoadConstant(1),
-            Instruction::Add,
-            Instruction::Return,
-        ];
-        for i in instrs {
-            c.write_instr(i);
-        }
-        c.values = vec![Value::Object(0), Value::Object(1)];
+        let f = main_func_any_val(
+            vec![Value::Object(0), Value::Object(1)],
+            vec![
+                Instruction::LoadConstant(0),
+                Instruction::LoadConstant(1),
+                Instruction::Add,
+                Instruction::Return,
+            ],
+        );
 
-        assert_eq!(bytecode.0.chunk, c);
-        assert_eq!(bytecode.1.get(0).unwrap(), &Object::String("oof".into()));
-        assert_eq!(bytecode.1.get(1).unwrap(), &Object::String("ooo".into()));
+        check(ast, f, heap);
     }
     // WARNING!! Monster code blocks ahead
     #[test]
     fn while_simple() {
-        let ast = vec![
-            let_stmt(id("x"), int(0)),
-            while_stmt(
-                bin(expr_id("x"), "<", int(6)),
-                block(vec![expr_stmt(asgn(
-                    id("x"),
-                    bin(int(1), "+", expr_id("x")),
-                ))]),
-            ),
-        ];
-        let mut code_gen = CodeGen::new();
-        let bytecode = code_gen.generate(&ast).unwrap();
-        let c = chunk(
-            vec![0, 6, 1],
+        check(
             vec![
-                Instruction::LoadConstant(0),
-                Instruction::LoadConstant(1),
-                Instruction::ReadLocal(0),
-                Instruction::Less,
-                Instruction::JumpIfFalse(11), //
-                Instruction::PopStack,
-                Instruction::ReadLocal(0),
-                Instruction::LoadConstant(2),
-                Instruction::Add,
-                Instruction::WriteLocal(0),
-                Instruction::Jump(-19),
-                Instruction::PopStack,
-                Instruction::Return,
+                let_stmt(id("x"), int(0)),
+                while_stmt(
+                    bin(expr_id("x"), "<", int(6)),
+                    block(vec![expr_stmt(asgn(
+                        id("x"),
+                        bin(int(1), "+", expr_id("x")),
+                    ))]),
+                ),
             ],
+            main_func_any_val(
+                vec![Value::Integer(0), Value::Integer(6), Value::Integer(1)],
+                vec![
+                    Instruction::LoadConstant(0),
+                    Instruction::LoadConstant(1),
+                    Instruction::ReadLocal(0),
+                    Instruction::Less,
+                    Instruction::JumpIfFalse(11), //
+                    Instruction::PopStack,
+                    Instruction::ReadLocal(0),
+                    Instruction::LoadConstant(2),
+                    Instruction::Add,
+                    Instruction::WriteLocal(0),
+                    Instruction::Jump(-19),
+                    Instruction::PopStack,
+                    Instruction::Return,
+                ],
+            ),
+            Heap::new(),
         );
-        assert_eq!(bytecode.0.chunk, c);
     }
     // WARNING!! Monster code blocks ahead
     #[test]
     fn if_only() {
-        let ast = vec![
-            let_stmt(id("x"), int(0)),
-            let_stmt(id("y"), int(3)),
-            if_stmt(vec![(
-                bin(expr_id("y"), ">", int(1)),
-                block(vec![expr_stmt(asgn(id("x"), int(4)))]),
-            )]),
-        ];
-        let mut code_gen = CodeGen::new();
-        let bytecode = code_gen.generate(&ast).unwrap();
-        let c = chunk(
-            vec![0, 3, 1, 4],
+        check(
             vec![
-                Instruction::LoadConstant(0),
-                Instruction::LoadConstant(1),
-                Instruction::LoadConstant(2),
-                Instruction::ReadLocal(1),
-                Instruction::Greater,
-                Instruction::JumpIfFalse(8), //
-                Instruction::PopStack,
-                Instruction::LoadConstant(3),
-                Instruction::WriteLocal(0),
-                Instruction::Jump(1),
-                Instruction::PopStack,
-                Instruction::Return,
+                let_stmt(id("x"), int(0)),
+                let_stmt(id("y"), int(3)),
+                if_stmt(vec![(
+                    bin(expr_id("y"), ">", int(1)),
+                    block(vec![expr_stmt(asgn(id("x"), int(4)))]),
+                )]),
             ],
+            main_func_any_val(
+                vec![
+                    Value::Integer(0),
+                    Value::Integer(3),
+                    Value::Integer(1),
+                    Value::Integer(4),
+                ],
+                vec![
+                    Instruction::LoadConstant(0),
+                    Instruction::LoadConstant(1),
+                    Instruction::LoadConstant(2),
+                    Instruction::ReadLocal(1),
+                    Instruction::Greater,
+                    Instruction::JumpIfFalse(8), //
+                    Instruction::PopStack,
+                    Instruction::LoadConstant(3),
+                    Instruction::WriteLocal(0),
+                    Instruction::Jump(1),
+                    Instruction::PopStack,
+                    Instruction::Return,
+                ],
+            ),
+            Heap::new(),
         );
-        assert_eq!(bytecode.0.chunk, c);
     }
     #[test]
     fn if_else_short() {
-        let ast = vec![
-            let_stmt(id("x"), int(0)),
-            let_stmt(id("y"), int(3)),
-            if_else_stmt(
-                vec![(
-                    bin(expr_id("y"), ">", int(1)),
-                    block(vec![expr_stmt(asgn(id("x"), int(4)))]),
-                )],
-                block(vec![expr_stmt(asgn(id("x"), int(6)))]),
-            ),
-        ];
-        let mut code_gen = CodeGen::new();
-        let bytecode = code_gen.generate(&ast).unwrap();
-        let c = chunk(
-            vec![0, 3, 1, 4, 6],
+        check(
             vec![
-                Instruction::LoadConstant(0),
-                Instruction::LoadConstant(1),
-                Instruction::LoadConstant(2),
-                Instruction::ReadLocal(1),
-                Instruction::Greater,
-                Instruction::JumpIfFalse(8), //
-                Instruction::PopStack,
-                Instruction::LoadConstant(3),
-                Instruction::WriteLocal(0),
-                Instruction::Jump(5), //
-                Instruction::PopStack,
-                Instruction::LoadConstant(4),
-                Instruction::WriteLocal(0),
-                Instruction::Return,
+                let_stmt(id("x"), int(0)),
+                let_stmt(id("y"), int(3)),
+                if_else_stmt(
+                    vec![(
+                        bin(expr_id("y"), ">", int(1)),
+                        block(vec![expr_stmt(asgn(id("x"), int(4)))]),
+                    )],
+                    block(vec![expr_stmt(asgn(id("x"), int(6)))]),
+                ),
             ],
+            main_func_any_val(
+                vec![
+                    Value::Integer(0),
+                    Value::Integer(3),
+                    Value::Integer(1),
+                    Value::Integer(4),
+                    Value::Integer(6),
+                ],
+                vec![
+                    Instruction::LoadConstant(0),
+                    Instruction::LoadConstant(1),
+                    Instruction::LoadConstant(2),
+                    Instruction::ReadLocal(1),
+                    Instruction::Greater,
+                    Instruction::JumpIfFalse(8), //
+                    Instruction::PopStack,
+                    Instruction::LoadConstant(3),
+                    Instruction::WriteLocal(0),
+                    Instruction::Jump(5), //
+                    Instruction::PopStack,
+                    Instruction::LoadConstant(4),
+                    Instruction::WriteLocal(0),
+                    Instruction::Return,
+                ],
+            ),
+            Heap::new(),
         );
-        assert_eq!(bytecode.0.chunk, c);
     }
     #[test]
     fn if_else_long() {
-        let ast = vec![
-            let_stmt(id("x"), int(0)),
-            let_stmt(id("y"), int(3)),
-            if_else_stmt(
-                vec![
-                    (
-                        bin(expr_id("y"), ">", int(1)),
-                        block(vec![expr_stmt(asgn(id("x"), int(4)))]),
-                    ),
-                    (
-                        bin(expr_id("y"), "<", int(1)),
-                        block(vec![expr_stmt(asgn(id("x"), int(5)))]),
-                    ),
-                ],
-                block(vec![expr_stmt(asgn(id("x"), int(6)))]),
-            ),
-        ];
-        let mut code_gen = CodeGen::new();
-        let bytecode = code_gen.generate(&ast).unwrap();
-        let c = chunk(
-            vec![0, 3, 1, 4, 1, 5, 6],
+        check(
             vec![
-                Instruction::LoadConstant(0),
-                Instruction::LoadConstant(1),
-                Instruction::LoadConstant(2),
-                Instruction::ReadLocal(1),
-                Instruction::Greater,
-                Instruction::JumpIfFalse(8), //
-                Instruction::PopStack,
-                Instruction::LoadConstant(3),
-                Instruction::WriteLocal(0),
-                Instruction::Jump(22), //
-                Instruction::PopStack,
-                Instruction::LoadConstant(4),
-                Instruction::ReadLocal(1),
-                Instruction::Less,
-                Instruction::JumpIfFalse(8), //
-                Instruction::PopStack,
-                Instruction::LoadConstant(5),
-                Instruction::WriteLocal(0),
-                Instruction::Jump(5),
-                Instruction::PopStack,
-                Instruction::LoadConstant(6),
-                Instruction::WriteLocal(0),
-                Instruction::Return,
+                let_stmt(id("x"), int(0)),
+                let_stmt(id("y"), int(3)),
+                if_else_stmt(
+                    vec![
+                        (
+                            bin(expr_id("y"), ">", int(1)),
+                            block(vec![expr_stmt(asgn(id("x"), int(4)))]),
+                        ),
+                        (
+                            bin(expr_id("y"), "<", int(1)),
+                            block(vec![expr_stmt(asgn(id("x"), int(5)))]),
+                        ),
+                    ],
+                    block(vec![expr_stmt(asgn(id("x"), int(6)))]),
+                ),
             ],
+            main_func_any_val(
+                vec![
+                    Value::Integer(0),
+                    Value::Integer(3),
+                    Value::Integer(1),
+                    Value::Integer(4),
+                    Value::Integer(1),
+                    Value::Integer(5),
+                    Value::Integer(6),
+                ],
+                vec![
+                    Instruction::LoadConstant(0),
+                    Instruction::LoadConstant(1),
+                    Instruction::LoadConstant(2),
+                    Instruction::ReadLocal(1),
+                    Instruction::Greater,
+                    Instruction::JumpIfFalse(8), //
+                    Instruction::PopStack,
+                    Instruction::LoadConstant(3),
+                    Instruction::WriteLocal(0),
+                    Instruction::Jump(22), //
+                    Instruction::PopStack,
+                    Instruction::LoadConstant(4),
+                    Instruction::ReadLocal(1),
+                    Instruction::Less,
+                    Instruction::JumpIfFalse(8), //
+                    Instruction::PopStack,
+                    Instruction::LoadConstant(5),
+                    Instruction::WriteLocal(0),
+                    Instruction::Jump(5),
+                    Instruction::PopStack,
+                    Instruction::LoadConstant(6),
+                    Instruction::WriteLocal(0),
+                    Instruction::Return,
+                ],
+            ),
+            Heap::new(),
         );
-        assert_eq!(bytecode.0.chunk, c);
     }
 }

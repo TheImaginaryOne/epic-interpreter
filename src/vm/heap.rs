@@ -1,4 +1,5 @@
 use crate::vm::chunk::Chunk;
+use crate::vm::Value;
 
 pub type Handle = usize;
 
@@ -6,8 +7,29 @@ pub type Handle = usize;
 pub enum Object {
     String(String),
     Function(ObjFunction),
+    NativeFunction(NativeFunction),
 }
 
+pub struct RustFunction(pub Box<dyn Fn(&Heap, &[Value]) -> Value>);
+impl std::fmt::Debug for RustFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "<native function>")?;
+        Ok(())
+    }
+}
+/// dummy
+impl std::cmp::PartialEq for RustFunction {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct NativeFunction {
+    pub arity: u8,
+    pub name: String,
+    pub function: RustFunction,
+}
 #[derive(PartialEq, Debug)]
 pub struct ObjFunction {
     pub arity: u8,
